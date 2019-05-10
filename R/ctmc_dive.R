@@ -3,105 +3,27 @@
 #' Compute matrices required to fit temporal smooth
 #'
 #' @param dat data frame (see fitCTMCdive)
-#' @param nknots number of basis functions / knots
+#' @param nint number of integration points / knots 
 #'
-#' @return INLA finite element matrices required to fit smooth
+#' @return list of mesh, SPDE objects, point A matrices, and integral A matrices 
 #' @export
-MakeSmooth <- function(dat, nknots = NULL) {
+MakeSmooth <- function(dat) {
   # make mesh over time
-  knot.locations <- seq(min(dat$time), max(dat$time), length = nknots + 1)
-  mesh <- inla.mesh.1d(knot.locations, interval = c(min(dat$time), max(dat$time)), degree = 2)
-  # make penalty matrices
-  ind <- unique(dat$ID)
-  nind <- length(ind)
-  Cind <- vector(mode = "list", length = nind)
-  G1ind <- vector(mode = "list", length = nind)
-  G2ind <- vector(mode = "list", length = nind)
-  Aind <- vector(mode = "list", length = nind)
-  for (i in 1:nind) {
-    S <- inla.mesh.1d.fem(mesh)
-    Cind[[i]] <- S$c1
-    G1ind[[i]] <- S$g1
-    G2ind[[i]] <- S$g2
-    Aind[[i]] <- inla.mesh.1d.A(mesh, dat$time)
-  }
-  res <- list(C = bdiag(Cind),
-              G1 = bdiag(G1ind),
-              G2 = bdiag(G2ind),
-              A = bdiag(Aind))
+  nk <- nrow(dat)
+  knots <- seq(min(dat$dive_start), max(dat$dive_end), length = nk)
+  mesh <- inla.mesh.1d(knots, degree = 1)
+  # get projector matrices
+  A_dive <- inla.spde.make.A(mesh, loc = dat$dive_start)
+  A_surf <- inla.spde.make.A(mesh, loc = dat$dive_end)
+  # make SPDEs 
+  spde <- inla.spde2.matern(mesh, alpha = 2)
+  res <- list(mesh = mesh, 
+              A_dive = A_dive, 
+              A_surf = A_surf, 
+              C  = spde$param.inla["M0"][[1]], 
+              G1 = spde$param.inla["M1"][[1]], 
+              G2 = spde$param.inla["M2"][[1]])
   return(res)
-}
-
-#' Compute log-likelihood of continuous-time Markov chain
-#'
-#' @param par parameter vector on link scale
-#' @param Xs design matrices
-#' @param dat data frame (see fitCTMCdive)
-#' @param len indices that divide par into dive, surfacing parameters
-#' @param model type of model "iid" is no temporal correlation, "cor" is temporal correlation
-#' @param model.args contains nknots (number of knots), smooth (output of MakeSmooth function), and smoothing
-#' parameters (lambda)
-#' @param print TRUE if useful output to be printed
-#'
-#' @return log-likelihood value
-#' @export
-CalcLlk <- function(par, Xs, dat, len, model = "iid", model.args = NULL, print = FALSE) {
-  ## Compute parameters
-  # linear predictors
-  nu_surf <- Xs[[1]] %*% par[(1):(len[1])]
-  nu_dive <- Xs[[2]] %*% par[(len[1] + 1):(len[1] + len[2])]
-  # if random walk smooth added
-  npar <- sum(len)
-  if (model == "cor") {
-    smooth <- model.args$S
-    lambda <- model.args$lambda
-    nknots <- model.args$nknots
-    if (is.null(nknots)) nknots <- 10
-    A <- smooth$A
-    if (!is.na(lambda[1])) {
-      x_surf_par <- par[(npar + 1):(npar + nknots)]
-      x_surf <- A %*% x_surf_par
-      nu_surf <- nu_surf + x_surf
-      npar <- npar + nknots
-    }
-    if (!is.na(lambda[2])) {
-      x_dive_par <- par[(npar + 1):(npar + nknots)]
-      x_dive <- A %*% x_dive_par
-      nu_dive <- nu_dive + x_dive
-      npar <- npar + nknots
-    }
-  }
-  # event intensity for diving and surfacing
-  l_dive <- exp(nu_dive)
-  l_surf <- exp(nu_surf)
-  ## Compute likelihood
-  llk <- 0
-  # for observed dive times
-  llk <- llk + sum(nu_surf - dat$dive * l_surf)
-  # for observed surface times
-  llk <- llk + sum(nu_dive - dat$surface * l_dive)
-  # if RW smooth then add penalties
-  if (model == "cor") {
-    C <- smooth$C
-    G1 <- smooth$G1
-    G2 <- smooth$G2
-    if (!is.na(lambda[1])) llk <- llk - as.numeric(lambda[1] * t(x_surf_par) %*% (lambda[1]^4 * C + 2 * lambda[1]^2 * G1 + G2) %*% x_surf_par)
-    if (!is.na(lambda[2])) llk <- llk - as.numeric(lambda[2] * t(x_dive_par) %*% (lambda[2]^4 * C + 2 * lambda[2]^2 * G1 + G2) %*% x_dive_par)
-  }
-  ## Print likelihood if desired
-  if (print) cat(" llk: ", llk, "\n")
-  return(llk)
-}
-
-#' Compute negative log-likelihood
-#'
-#' @inheritParams CalcLlk
-#'
-#' @return negative log-likelihood
-#' @export
-CalcNegllk <- function(par, Xs, dat, len, model = "iid", model.args = NULL, print = FALSE) {
-  llk <- CalcLlk(par, Xs, dat, len, model = model, model.args, print)
-  return(-llk)
 }
 
 #' Fits continuous-time Markov chain to dive and surface duration data
@@ -123,7 +45,7 @@ CalcNegllk <- function(par, Xs, dat, len, model = "iid", model.args = NULL, prin
 #' data frame (dat), model arguments (model.args) including smoothing matrices, and the
 #' model type (model).
 #' @export
-FitCTMCdive <- function(forms, dat, model = "iid", model.args = NULL, print = TRUE, iterlim = 500) {
+FitCTMCdive <- function(forms, dat, model = "iid", correlated = FALSE, model.args = NULL, print = TRUE) {
   ## Make design matrices and parameter vector
   if (print) cat("Computing design matrices.......")
   Xs <- vector(mode = "list", length = 2)
@@ -139,95 +61,166 @@ FitCTMCdive <- function(forms, dat, model = "iid", model.args = NULL, print = TR
     par <- c(par, rep(0, len[ind]))
     b <- b + len[ind]
   }
-  par[1] <- 1.0 / mean(dat$dive)
-  par[len[1] + 1] <- 1.0 / mean(dat$surface)
+  par[1] <- log(mean(dat$dive))
+  par[len[1] + 1] <- log(mean(dat$surface))
   if(print) cat("done\n")
 
   # starting par given?
   if (!is.null(model.args$ini_par)) par <- model.args$ini_par
 
   ## If model = "cor" then compute smooth information
-  if (model == "cor") {
-    if(print) cat("Computing smoothing matrices.......")
-    nknots <- model.args$nknots
-    if (is.null(nknots)) nknots <- 10
-    model.args$S <- MakeSmooth(dat, nknots)
-    # add parameters
-    lambda <- model.args$lambda
-    if (!is.na(lambda[1])) par <- c(par, rep(0, nknots))
-    if (!is.na(lambda[2])) par <- c(par, rep(0, nknots))
-    if(print) cat("done\n")
+  random <- NULL
+  map <- list()
+  sm <- MakeSmooth(dat)
+  n_mesh <- sm$mesh$n
+  lambda <- rep(0, 4)
+  if (model != "iid") {
+    lambda <- rep(0, 4)
+    if (model == "d") lambda[1:2] <- 1
+    if (model == "s") lambda[3:4] <- 1 
+    if (model == "ds" | model == "sd") lambda[1:4] <- 1 
+  } 
+  
+  ## Setup TMB parameter list 
+  tmb_parameters <- list(par_dive = par[1:len[1]], 
+                         par_surf = par[(len[1] + 1): length(par)], 
+                         log_sigma_surf = log(sd(dat$dive)), 
+                         log_sigma_dive = log(sd(dat$surface)), 
+                         cor_surfdive = 0, 
+                         log_kappa_dive = 0, 
+                         log_kappa_surf = 0,
+                         log_tau_dive = 0, 
+                         log_tau_surf = 0, 
+                         s_dive = rep(0, n_mesh), 
+                         s_surf = rep(0, n_mesh)) 
+  
+  ## Create TMB model object
+  if (!(lambda[1] < 1e-10)) {
+    random <- c(random, "s_dive")
+    # fix intercept 
+    par_int <- seq(length(tmb_parameters$par_dive))
+    par_int[1] <- NA
+    par_int <- as.factor(par_int)
+    map <- c(map, list(par_dive = par_int))
+    Xs[[1]][,1] <- 0
+    tmb_parameters$s_dive <- rep(tmb_parameters$par_dive[1], n_mesh)
+  } else {
+    map <- c(map,  list(log_tau_dive = as.factor(NA), 
+                        log_kappa_dive = as.factor(NA), 
+                        s_dive = factor(rep(NA, n_mesh))))
   }
-
-  ## Fit model
+  if (!(lambda[3] < 1e-10)) {
+    random <- c(random, "s_surf")
+    # remove intercept 
+    par_int <- seq(length(tmb_parameters$par_surf))
+    par_int[1] <- NA
+    par_int <- as.factor(par_int)
+    map <- c(map, list(par_surf = par_int))
+    Xs[[2]][,1] <- 0 
+    tmb_parameters$s_surf <- rep(tmb_parameters$par_surf[1], n_mesh)
+  } else {
+    map <- c(map,  list(log_tau_surf = as.factor(NA), 
+                        log_kappa_surf = as.factor(NA), 
+                        s_surf = factor(rep(NA, n_mesh))))
+  }
+  if (!correlated) map <- c(map, list(cor_surfdive = as.factor(NA)))
+  
+  ## Setup TMB data list 
+  tmb_dat <- list(ldive = log(dat$dive), 
+                  lsurf = log(dat$surface), 
+                  A_dive = sm$A_dive, 
+                  A_surf = sm$A_surf, 
+                  Xdive = Xs[[1]],
+                  Xsurf = Xs[[2]],
+                  C = sm$C, 
+                  G1 = sm$G1, 
+                  G2 = sm$G2)
+  
+  ## Create object
+  obj <- MakeADFun(tmb_dat, tmb_parameters, random = random, map = map, hessian = TRUE, DLL = "ctmc_dive")
+                         
+  ## Fit Model 
   if (print) cat("Fitting model.......\n")
   t0 <- Sys.time()
-  mod <- suppressWarnings(nlm(CalcNegllk,
-                              par,
-                              Xs = Xs,
-                              dat = dat,
-                              len = len,
-                              model = model,
-                              model.args = model.args,
-                              print = print,
-                              hessian = TRUE,
-                              iterlim = iterlim))
-  if (mod$code > 2) stop("Convergence failed with nlm code ", mod$code, ".\n")
+  mod <- nlminb(obj$par, obj$fn, gradient = obj$gr)
   t1 <- Sys.time()
   diff <- difftime(t1, t0)
   if(print) cat("Model fit in ", signif(diff[[1]], 2), attr(diff, "units"), "\n")
-
+  # 
   ## Compute estimates
   if(print) cat("Estimating variance.......")
   npar <- sum(len)
-  est <- mod$estimate[1:npar]
-  var <- try(solve(mod$hessian[1:npar, 1:npar]))
-  if ("try-error" %in% class(var)) warning("Could not invert Hessian to compute variance matrix.")
+  rep <- sdreport(obj)
+  est <- rep$par.fixed
+  var <- rep$cov.fixed
   sds <- sqrt(diag(var))
+  if (model != "iid") {
+    if (lambda[1] > 1e-10) {
+      est <- c(rep$value[1], est) 
+      sds <- c(rep$sd[1], sds)
+    }
+    if (lambda[3] > 1e-10) {
+      est <- c(est[1:len[1]], rep$value[2], est[(len[1]+1):length(est)])
+      sds <- c(sds[1:len[1]], rep$sd[2], sds[(len[1]+1):length(sds)])
+    }
+  }
   if(print) cat("done\n")
-
+  # 
   # confidence intervals
   if(print) cat("Computing confidence intervals.......")
   LCL <- est - qnorm(0.975) * sds
   UCL <- est + qnorm(0.975) * sds
   if(print) cat("done\n")
-
+  # 
   # pvalues
   pval <- 2 * pnorm(-abs(est), 0, sds)
-
-   # surface result
+  # 
+  #  dive result
   if(print) cat("Formatting results.......")
   s <- 1
   e <- len[1]
-  res_surf <- data.frame(Est. = est[s:e],
-                          SD. = sds[s:e],
-                          LCL. = LCL[s:e],
-                          UCL. = UCL[s:e],
-                          p_value = pval[s:e])
-  res_surf <- signif(res_surf, 4)
-  rownames(res_surf) <- colnames(Xs[[1]])
+  res_dive <- data.frame(Est. = est[s:e],
+                           SD. = sds[s:e],
+                           LCL. = LCL[s:e],
+                           UCL. = UCL[s:e],
+                           p_value = pval[s:e])
+  res_dive <- signif(res_dive, 4)
+  rownames(res_dive) <- colnames(Xs[[1]])
 
-  # dive result
+  # surface result
   s <- len[1] + 1
   e <- len[1] + len[2]
-  res_dive <- data.frame(Est. = est[s:e],
+  res_surf <- data.frame(Est. = est[s:e],
                          SD. = sds[s:e],
                          LCL. = LCL[s:e],
                          UCL. = UCL[s:e],
                          p_value = pval[s:e])
-  res_dive <- signif(res_dive, 4)
-  rownames(res_dive) <- colnames(Xs[[2]])
+  res_surf <- signif(res_surf, 4)
+  rownames(res_surf) <- colnames(Xs[[2]])
+  
+  # variance 
+  s <- len[1] + len[2] + 1
+  e <- length(est)
+  res_cor <- data.frame(Est. = est[s:e],
+                         SD. = sds[s:e],
+                         LCL. = LCL[s:e],
+                         UCL. = UCL[s:e],
+                         p_value = pval[s:e])
+  res_cor <- signif(res_cor, 4)
 
   # full result
-  res <- list(surface = res_surf, dive = res_dive)
+  res <- list(surface = res_surf, dive = res_dive, cor = res_cor)
 
   ans <- list(res = res,
               var = var,
               mod = mod,
+              rep = rep, 
               Xs = Xs,
+              sm = sm, 
               forms = forms,
               len = len,
               dat = dat,
+              lambda = lambda, 
               model.args = model.args,
               model = model)
   if(print) cat("done\n")
@@ -248,23 +241,25 @@ summary.CTMCdive <- function(mod) {
   cat("Model fit:\n")
   print(mod$forms[[1]])
   print(mod$forms[[2]])
-  if (mod$model == "cor") {
-    nknots <- ifelse(is.null(mod$model.args$nknots), 10, mod$model.args$nknots)
-    cat("with 1D SPDE smooth with", nknots, "knots for ")
-    if (!is.na(mod$model.args$lambda[1])) cat("dive duration")
-    if (!is.na(mod$model.args$lambda[1]) & !is.na(mod$model.args$lambda[2])) cat(" and ")
-    if (!is.na(mod$model.args$lambda[2])) cat("surfacing duration")
+  if (mod$model != "iid") {
+    cat("with 1D Matern smooth for ")
+    if (mod$lambda[1] > 1e-10) cat("dive duration")
+    if (mod$lambda[1] > 1e-10 & mod$lambda[3] > 1e-10) cat(" and ")
+    if (mod$lambda[3] > 1e-10) cat("surfacing duration")
     cat(".")
   }
   cat("\n")
   cat(rep("-", 30), "\n")
   cat("DIVE DURATION\n")
-  print(mod$res$surface)
+  print(mod$res$dive)
   cat("\n")
   cat(rep("-", 30), "\n")
   cat("SURFACE DURATION\n")
-  print(mod$res$dive)
+  print(mod$res$surface)
   cat("\n")
+  cat(rep("-", 30), "\n")
+  cat("VARIANCE MODEL\n")
+  print(mod$res$cor)
   invisible(mod)
  }
 
@@ -278,7 +273,12 @@ print.CTMCdive <- summary.CTMCdive
 #' @return a list of surface and dive mean predictions
 #' @export
 predict.CTMCdive <- function(mod, newdata = NULL) {
-  par <- mod$mod$estimate
+  par <- mod$rep$par.fixed
+  len <- mod$len
+  if (mod$lambda[1] > 1e-10) par <- c(0, par)
+  if (mod$lambda[3] > 1e-10) par <- c(par[1:len[1]], 0, par[(len[1]+1):length(par)])
+  par_dive <- par[1:len[1]]
+  par_surf <- par[(len[1] + 1):(len[1] + len[2])]
   # get design matrices
   if (!is.null(newdata)) {
     forms <- mod$forms
@@ -293,33 +293,28 @@ predict.CTMCdive <- function(mod, newdata = NULL) {
     Xs <- mod$Xs
   }
   # linear predictors
-  len <- mod$len
-  nu_surf <- Xs[[1]] %*% par[(1):(len[1])]
-  nu_dive <- Xs[[2]] %*% par[(len[1] + 1):(len[1] + len[2])]
+  nu_dive <- Xs[[1]] %*% par_dive
+  nu_surf <- Xs[[2]] %*% par_surf
   # add RW smooths if necessary
-  if (mod$model == "cor") {
+  if (mod$model != "iid") {
     npar <- sum(len)
-    smooth <- mod$model.args$S
-    lambda <- mod$model.args$lambda
-    nknots <- mod$model.args$nknots
-    if (is.null(nknots)) nknots <- 10
-    if (!is.na(lambda[1])) {
-      x_surf <- par[(npar + 1):(npar + nknots)]
-      nu_surf <- nu_surf + smooth$A %*% x_surf
-      npar <- npar + nknots
+    lambda <- mod$lambda
+    if (lambda[3]>1e-10) {
+      x_surf <- mod$rep$par.random[names(mod$rep$par.random) == "s_surf"]
+      nu_surf <- nu_surf + (mod$sm$A_surf %*% x_surf)
     }
-    if (!is.na(lambda[2])) {
-      x_dive <- + par[(npar + 1):(npar + nknots)]
-      nu_dive <- nu_dive + smooth$A %*% x_dive
-      npar <- npar + nknots
+    if (lambda[1]>1e-10) {
+      x_dive <- mod$rep$par.random[names(mod$rep$par.random) == "s_dive"]
+      nu_dive <- nu_dive + (mod$sm$A_dive %*% x_dive)
     }
   }
   # predicted durations for diving and surfacing (1/intensity)
-  mu_dive <- exp(-nu_surf)
-  mu_surf <- exp(-nu_dive)
+  mu_dive <- exp(nu_dive)
+  mu_surf <- exp(nu_surf)
 
   # return predictions
   res <- list(surface = mu_surf, dive = mu_dive)
+  return(res)
 }
 
 #' Plot fitted CTMCdive model
@@ -370,59 +365,9 @@ plot.CTMCdive <- function(mod, quant = 1, pick = NULL, pred = NULL, xlim = NULL)
 #' if lambda > 0)
 #' @export
 logLik.CTMCdive <- function(object, ...) {
-  val <- -object$mod$minimum
-  npar <- length(object$mod$estimate)
+  val <- -object$mod$objective
+  npar <- length(object$mod$par)
   llk <- val
   attributes(llk)$df <- npar
   return(llk)
 }
-
-#' Simulate dive and surface durations for a single individual
-#'
-#' @param forms formulae for dive and surface processes
-#' @param dat data frame with covariates
-#' @param par true parameter values for linear predictors with "dive" then "surface"
-#' parameters
-#' @param n number of records to simulate
-#' @param model see fitCTMCdive
-#' @param model.args seefitCTMCdive
-#' @param print see fitCTMCdive
-#'
-#' @return data frame with "dive", "surface", and time columns added
-#' @export
-simulateCTMCdive <- function(forms, dat, par, n = 1, model = "iid", model.args = NULL, print = TRUE) {
-  ## Make design matrices and parameter vector
-  Xs <- vector(mode = "list", length = 2)
-  len <- rep(0, 2)
-  for (i in 1:2) {
-    ind <- switch (as.character(forms[[i]][[2]]), "surface" = 2, "dive" = 1)
-    ter <- terms(forms[[i]])
-    ter <- delete.response(ter)
-    Xs[[ind]] <- model.matrix(ter, data = dat)
-    len[ind] <- ncol(Xs[[ind]])
-  }
-  ## If model = "cor" then compute smooth information
-  if (model == "cor") {
-    nknots <- model.args$nknots
-    if (is.null(nknots)) nknots <- 10
-    model.args$S <- MakeSmooth(dat, nknots)
-    # add parameters
-    lambda <- model.args$lambda
-    if (!is.na(lambda[1])) par <- c(par, rep(0, nknots))
-    if (!is.na(lambda[2])) par <- c(par, rep(0, nknots))
-  }
-  # linear predictors
-  nu_surf <- Xs[[1]] %*% par[(1):(len[1])]
-  nu_dive <- Xs[[2]] %*% par[(len[1] + 1):(len[1] + len[2])]
-  # event intensity for diving and surfacing
-  l_dive <- exp(nu_dive)
-  l_surf <- exp(nu_surf)
-  # simulate dives and surfacings
-  dive <- rexp(n, l_dive)
-  surface <- rexp(n, l_surf)
-  time <- cumsum(dive + surface) - dive[1] - surface[1]
-  res <- data.frame(time = time, dive = dive, surface = surface)
-  return(cbind(res, dat))
-}
-
-

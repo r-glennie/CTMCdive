@@ -6,7 +6,8 @@ Author: Richard Glennie
 Maintainer: Richard Glennie <rg374@st-andrews.ac.uk> 
 Description: CTMCdive describes observations of dive durations and surface durations as arising from a continuous-time Markov chain with two states: diving and not diving. 
 License: MIT + License
-Depends: INLA
+Depends: INLA, TMB, RcppEigen 
+LinkingTo: TMB, RcppEigen
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 6.1.0
