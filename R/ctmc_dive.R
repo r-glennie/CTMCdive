@@ -3,49 +3,65 @@
 #' Compute matrices required to fit temporal smooth
 #'
 #' @param dat data frame (see fitCTMCdive)
-#' @param nint number of integration points / knots 
+#' @param nk number of integration points / knots 
 #'
 #' @return list of mesh, SPDE objects, point A matrices, and integral A matrices 
 #' @export
-MakeSmooth <- function(dat) {
-  # make mesh over time
-  nk <- nrow(dat)
-  knots <- seq(min(dat$dive_start), max(dat$dive_end), length = nk)
-  mesh <- inla.mesh.1d(knots, degree = 1)
-  # get projector matrices
-  A_dive <- inla.spde.make.A(mesh, loc = dat$dive_start)
-  A_surf <- inla.spde.make.A(mesh, loc = dat$dive_end)
-  # make SPDEs 
-  spde <- inla.spde2.matern(mesh, alpha = 2)
-  res <- list(mesh = mesh, 
+MakeSmooth <- function(dat, nk = 100, nint = 1000) {
+  # get gam data 
+  gamdat <- gam(dive ~ s(time, bs = "cs"), data = dat, fit = FALSE, method = "REML")
+  # extract smoothing matrix 
+  S <- as(gamdat$S[[1]], "sparseMatrix")
+  # fit dummy model 
+  gamdat2 <- gam(dive ~ s(time, bs = "cs"), data = dat, fit = TRUE, method = "REML")
+  # construct prediction grid 
+  n <- nrow(dat)
+  ints <- seq(dat$time[1], dat$time[n] + dat$dive[n] + dat$surface[n], length = nint)
+  # spacing on prediction grid 
+  dt <- mean(diff(ints))
+  # predictor matrices 
+  A_dive <- predict(gamdat2, newdata = data.frame(time = dat$time), type = "lpmatrix")[,-1]
+  A_surf <- predict(gamdat2, newdata = data.frame(time = dat$time + dat$dive), type = "lpmatrix")[,-1]
+  A_grid <- predict(gamdat2, newdata = data.frame(time = ints), type = "lpmatrix")[,-1]
+  # get integration matrices
+  indD <- indS <- matrix(0, nr = n, nc = nint)
+  dive_end <- dat$time + dat$dive
+  for (i in 1:nint) {
+    wh <- which(ints[i] <= dat$time[-1] & ints[i] >= dive_end[-n])
+    if (length(wh) != 0) {
+      indD[wh, i] <- 1
+    }
+    wh <- which(ints[i] >= dat$time & ints[i] <= dive_end)
+    if (length(wh) != 0) {
+      indS[wh, i] <- 1
+    }
+  }
+  indD <- as(indD, "sparseMatrix")
+  indS <- as(indS, "sparseMatrix")
+  res <- list(S = S, 
               A_dive = A_dive, 
               A_surf = A_surf, 
-              C  = spde$param.inla["M0"][[1]], 
-              G1 = spde$param.inla["M1"][[1]], 
-              G2 = spde$param.inla["M2"][[1]])
+              A_grid = A_grid, 
+              indD = indD,
+              indS = indS,
+              dt = dt)
   return(res)
 }
-
+  
 #' Fits continuous-time Markov chain to dive and surface duration data
 #'
 #' @param forms a list with formulae for "dive" and "surface" variables
 #' @param dat a data frame with at least three columns named "dive" (dive durations), "surface" (surface durations),
 #' and "time" (start time of dive); all of these must be numeric.
-#' @param model "iid" fits a CTMC where durations are independent over time, "cor" fits temporal smooths so that
-#' durations can be temporally correlated.
-#' @param model.args if model = "cor" then model.args is a list with "nknots" set to the number of knots in the
-#' temporal smooth; it also must contain a vector "lambda" with two elements that correspond to "dive" and "surface"
-#' processes, if set to NA then no temporal smooth is fit, otherwise must be a positive number. This lambda is
-#' the smoothing penalty: the larger lambda is, the smoother the estimated temporal curve.
+#' @param model "iid" fits a CTMC where durations are independent over time, "d" fits a model where dive durations are correlated, 
+#' "s" where surface durations are correlated, and "ds" fits where both dive and surface are correlated 
 #' @param print if TRUE, useful output is printed
-#' @param iterlim iteration limit for nlm optimiser (default is 500)
 #'
-#' @return a CTMCdive model object: a list of the estimated results (res), variance matrix (var), fitted model returned from nlm (mod),
-#' design matrices (Xs), formulae (forms), indices that divide par between dive and surface parameters (len),
-#' data frame (dat), model arguments (model.args) including smoothing matrices, and the
-#' model type (model).
+#' @return a CTMCdive model object: a list of the estimated results (res), variance matrix (var), fitted model returned from optim (mod),
+#' output from sdreport (res), design matrices (Xs), smoothing data (sm), formulae (forms), indices that divide par between dive and surface parameters (len),
+#' data frame (dat), indicators for smooths used (lambda), and model type (model).
 #' @export
-FitCTMCdive <- function(forms, dat, model = "iid", correlated = FALSE, model.args = NULL, print = TRUE) {
+FitCTMCdive <- function(forms, dat, model = "iid", print = TRUE) {
   ## Make design matrices and parameter vector
   if (print) cat("Computing design matrices.......")
   Xs <- vector(mode = "list", length = 2)
@@ -61,80 +77,56 @@ FitCTMCdive <- function(forms, dat, model = "iid", correlated = FALSE, model.arg
     par <- c(par, rep(0, len[ind]))
     b <- b + len[ind]
   }
-  par[1] <- log(mean(dat$dive))
-  par[len[1] + 1] <- log(mean(dat$surface))
+  par[1] <- -log(mean(dat$dive))
+  par[len[1] + 1] <- -log(mean(dat$surface))
   if(print) cat("done\n")
 
-  # starting par given?
-  if (!is.null(model.args$ini_par)) par <- model.args$ini_par
-
-  ## If model = "cor" then compute smooth information
+  # smoothing data 
   random <- NULL
   map <- list()
   sm <- MakeSmooth(dat)
-  n_mesh <- sm$mesh$n
-  lambda <- rep(0, 4)
+  n_mesh <- ncol(sm$S)
+  lambda <- rep(0, 2)
   if (model != "iid") {
-    lambda <- rep(0, 4)
-    if (model == "d") lambda[1:2] <- 1
-    if (model == "s") lambda[3:4] <- 1 
-    if (model == "ds" | model == "sd") lambda[1:4] <- 1 
+    if (model == "d") lambda[1] <- 1
+    if (model == "s") lambda[2] <- 1 
+    if (model == "ds" | model == "sd") lambda[1:2] <- 1 
   } 
   
   ## Setup TMB parameter list 
   tmb_parameters <- list(par_dive = par[1:len[1]], 
                          par_surf = par[(len[1] + 1): length(par)], 
-                         log_sigma_surf = log(sd(dat$dive)), 
-                         log_sigma_dive = log(sd(dat$surface)), 
-                         cor_surfdive = 0, 
-                         log_kappa_dive = 0, 
-                         log_kappa_surf = 0,
-                         log_tau_dive = 0, 
-                         log_tau_surf = 0, 
+                         log_lambda_dive = 0, 
+                         log_lambda_surf = 0,
                          s_dive = rep(0, n_mesh), 
                          s_surf = rep(0, n_mesh)) 
   
   ## Create TMB model object
   if (!(lambda[1] < 1e-10)) {
     random <- c(random, "s_dive")
-    # fix intercept 
-    par_int <- seq(length(tmb_parameters$par_dive))
-    par_int[1] <- NA
-    par_int <- as.factor(par_int)
-    map <- c(map, list(par_dive = par_int))
-    Xs[[1]][,1] <- 0
-    tmb_parameters$s_dive <- rep(tmb_parameters$par_dive[1], n_mesh)
+    tmb_parameters$s_dive <- rep(0, n_mesh)
   } else {
-    map <- c(map,  list(log_tau_dive = as.factor(NA), 
-                        log_kappa_dive = as.factor(NA), 
+    map <- c(map,  list(log_lambda_dive = as.factor(NA), 
                         s_dive = factor(rep(NA, n_mesh))))
   }
-  if (!(lambda[3] < 1e-10)) {
+  if (!(lambda[2] < 1e-10)) {
     random <- c(random, "s_surf")
-    # remove intercept 
-    par_int <- seq(length(tmb_parameters$par_surf))
-    par_int[1] <- NA
-    par_int <- as.factor(par_int)
-    map <- c(map, list(par_surf = par_int))
-    Xs[[2]][,1] <- 0 
-    tmb_parameters$s_surf <- rep(tmb_parameters$par_surf[1], n_mesh)
+    tmb_parameters$s_surf <- rep(0, n_mesh)
   } else {
-    map <- c(map,  list(log_tau_surf = as.factor(NA), 
-                        log_kappa_surf = as.factor(NA), 
+    map <- c(map,  list(log_lambda_surf = as.factor(NA), 
                         s_surf = factor(rep(NA, n_mesh))))
   }
-  if (!correlated) map <- c(map, list(cor_surfdive = as.factor(NA)))
   
   ## Setup TMB data list 
-  tmb_dat <- list(ldive = log(dat$dive), 
-                  lsurf = log(dat$surface), 
-                  A_dive = sm$A_dive, 
+  tmb_dat <- list(Xdive = Xs[[1]],
+                  Xsurf = Xs[[2]], 
+                  S = sm$S, 
+                  A_dive = sm$A_dive,
                   A_surf = sm$A_surf, 
-                  Xdive = Xs[[1]],
-                  Xsurf = Xs[[2]],
-                  C = sm$C, 
-                  G1 = sm$G1, 
-                  G2 = sm$G2)
+                  A_grid = sm$A_grid, 
+                  indD = sm$indD, 
+                  indS = sm$indS, 
+                  dt = sm$dt)
   
   ## Create object
   obj <- MakeADFun(tmb_dat, tmb_parameters, random = random, map = map, hessian = TRUE, DLL = "ctmc_dive")
@@ -142,7 +134,7 @@ FitCTMCdive <- function(forms, dat, model = "iid", correlated = FALSE, model.arg
   ## Fit Model 
   if (print) cat("Fitting model.......\n")
   t0 <- Sys.time()
-  mod <- nlminb(obj$par, obj$fn, gradient = obj$gr)
+  mod <- do.call(optim, obj)
   t1 <- Sys.time()
   diff <- difftime(t1, t0)
   if(print) cat("Model fit in ", signif(diff[[1]], 2), attr(diff, "units"), "\n")
@@ -154,16 +146,6 @@ FitCTMCdive <- function(forms, dat, model = "iid", correlated = FALSE, model.arg
   est <- rep$par.fixed
   var <- rep$cov.fixed
   sds <- sqrt(diag(var))
-  if (model != "iid") {
-    if (lambda[1] > 1e-10) {
-      est <- c(rep$value[1], est) 
-      sds <- c(rep$sd[1], sds)
-    }
-    if (lambda[3] > 1e-10) {
-      est <- c(est[1:len[1]], rep$value[2], est[(len[1]+1):length(est)])
-      sds <- c(sds[1:len[1]], rep$sd[2], sds[(len[1]+1):length(sds)])
-    }
-  }
   if(print) cat("done\n")
   # 
   # confidence intervals
@@ -197,19 +179,10 @@ FitCTMCdive <- function(forms, dat, model = "iid", correlated = FALSE, model.arg
                          p_value = pval[s:e])
   res_surf <- signif(res_surf, 4)
   rownames(res_surf) <- colnames(Xs[[2]])
-  
-  # variance 
-  s <- len[1] + len[2] + 1
-  e <- length(est)
-  res_cor <- data.frame(Est. = est[s:e],
-                         SD. = sds[s:e],
-                         LCL. = LCL[s:e],
-                         UCL. = UCL[s:e],
-                         p_value = pval[s:e])
-  res_cor <- signif(res_cor, 4)
+
 
   # full result
-  res <- list(surface = res_surf, dive = res_dive, cor = res_cor)
+  res <- list(surface = res_surf, dive = res_dive)
 
   ans <- list(res = res,
               var = var,
@@ -221,7 +194,6 @@ FitCTMCdive <- function(forms, dat, model = "iid", correlated = FALSE, model.arg
               len = len,
               dat = dat,
               lambda = lambda, 
-              model.args = model.args,
               model = model)
   if(print) cat("done\n")
   class(ans) <- "CTMCdive"
@@ -242,7 +214,7 @@ summary.CTMCdive <- function(mod) {
   print(mod$forms[[1]])
   print(mod$forms[[2]])
   if (mod$model != "iid") {
-    cat("with 1D Matern smooth for ")
+    cat("with cubic shrinkage smooth for ")
     if (mod$lambda[1] > 1e-10) cat("dive duration")
     if (mod$lambda[1] > 1e-10 & mod$lambda[3] > 1e-10) cat(" and ")
     if (mod$lambda[3] > 1e-10) cat("surfacing duration")
@@ -250,16 +222,17 @@ summary.CTMCdive <- function(mod) {
   }
   cat("\n")
   cat(rep("-", 30), "\n")
-  cat("DIVE DURATION\n")
-  print(mod$res$dive)
+  cat("MEAN SURFACE DURATION\n")
+  dive <- mod$res$dive
+  dive[,c(1, 3, 4)] <- -dive[,c(1, 4, 3)]
+  print(dive)
   cat("\n")
   cat(rep("-", 30), "\n")
-  cat("SURFACE DURATION\n")
-  print(mod$res$surface)
+  cat("MEAN DIVE DURATION\n")
+  surf <- mod$res$surface
+  surf[, c(1, 3, 4)] <- -surf[, c(1, 4, 3)]
+  print(surf)
   cat("\n")
-  cat(rep("-", 30), "\n")
-  cat("VARIANCE MODEL\n")
-  print(mod$res$cor)
   invisible(mod)
  }
 
@@ -276,7 +249,7 @@ predict.CTMCdive <- function(mod, newdata = NULL) {
   par <- mod$rep$par.fixed
   len <- mod$len
   if (mod$lambda[1] > 1e-10) par <- c(0, par)
-  if (mod$lambda[3] > 1e-10) par <- c(par[1:len[1]], 0, par[(len[1]+1):length(par)])
+  if (mod$lambda[2] > 1e-10) par <- c(par[1:len[1]], 0, par[(len[1]+1):length(par)])
   par_dive <- par[1:len[1]]
   par_surf <- par[(len[1] + 1):(len[1] + len[2])]
   # get design matrices
@@ -299,7 +272,7 @@ predict.CTMCdive <- function(mod, newdata = NULL) {
   if (mod$model != "iid") {
     npar <- sum(len)
     lambda <- mod$lambda
-    if (lambda[3]>1e-10) {
+    if (lambda[2]>1e-10) {
       x_surf <- mod$rep$par.random[names(mod$rep$par.random) == "s_surf"]
       nu_surf <- nu_surf + (mod$sm$A_surf %*% x_surf)
     }
