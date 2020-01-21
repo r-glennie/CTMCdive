@@ -7,7 +7,7 @@
 #'
 #' @return list of mesh, SPDE objects, point A matrices, and integral A matrices 
 #' @export
-MakeSmooth <- function(dat, nk = 100, nint = 1000) {
+MakeSmooth <- function(dat, nk = 100, nint = 10000) {
   # get gam data 
   gamdat <- gam(dive ~ s(time, bs = "cs"), data = dat, fit = FALSE, method = "REML")
   # extract smoothing matrix 
@@ -280,17 +280,21 @@ predict.CTMCdive <- function(mod, newdata = NULL) {
   # get expectations 
   dt <- mean(diff(ints))
   exp_dive <- exp_surf <- rep(0, nrow(mod$dat))
+  r_dive <- r_surf <- rep(0, nrow(mod$dat))
   for (i in 1:nrow(mod$dat)) {
-    Ldive <- cumsum(lambda_dive[ints > mod$dat$time[i]])
-    Lsurf <- cumsum(lambda_surf[ints > (mod$dat$time[i] + mod$dat$dive[i])])
+    Ldive <- cumsum(lambda_dive[ints > mod$dat$time[i] + mod$dat$dive[i]])
+    Lsurf <- cumsum(lambda_surf[ints > (mod$dat$time[i])])
     Sdive <- exp(-Ldive * dt)
     Ssurf <- exp(-Lsurf * dt)
     # E(dive) comes from surface intensity and vice-versa 
     exp_dive[i] <- sum(Ssurf * dt)
     exp_surf[i] <- sum(Sdive * dt)
+    # get dive p-value 
+    r_dive[i] <- Ssurf[floor(mod$dat$dive[i] / dt)]
+    r_surf[i] <- Sdive[floor(mod$dat$surface[i] / dt)]
   }
   # return predictions
-  res <- list(surface = exp_surf, dive = exp_dive)
+  res <- list(surface = exp_surf, dive = exp_dive, rdive = r_dive, rsurf = r_surf)
   return(res)
 }
 
@@ -315,16 +319,16 @@ plot.CTMCdive <- function(mod, quant = 1, pick = NULL, pred = NULL, xlim = NULL)
   # get predicted values
   if (is.null(pred)) pred <- predict(mod)
   # get maximum time if scaled
-  time <- dat$time
+  time <- mod$dat$time
   # plot fitted values over observed
   if (pick == "all" | pick == "surface") {
-    q <- quantile(dat$surface, prob = quant)
-    plot(time, dat$surface, col = "grey60", xlab = "Time", ylab = "Surface duration",  ylim = c(min(dat$surface), q), xlim = xlim)
+    q <- quantile(mod$dat$surface, prob = quant)
+    plot(time, mod$dat$surface, col = "grey60", xlab = "Time", ylab = "Surface duration",  ylim = c(min(mod$dat$surface), q), xlim = xlim)
     lines(time, pred$surface, col = "red")
   }
   if (pick == "all" | pick == "dive") {
-    q <- quantile(dat$dive, prob = quant)
-    plot(time, dat$dive, col = "grey60", xlab = "Time", ylab = "Dive duration",  ylim = c(min(dat$dive), q), xlim = xlim)
+    q <- quantile(mod$dat$dive, prob = quant)
+    plot(time, mod$dat$dive, col = "grey60", xlab = "Time", ylab = "Dive duration",  ylim = c(min(mod$dat$dive), q), xlim = xlim)
     lines(time, pred$dive, col = "blue")
   }
   invisible(list(mod = mod, pred = pred))
