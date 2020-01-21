@@ -44,6 +44,7 @@ MakeSmooth <- function(dat, nk = 100, nint = 1000) {
               A_grid = A_grid, 
               indD = indD,
               indS = indS,
+              ints = ints, 
               dt = dt)
   return(res)
 }
@@ -215,23 +216,19 @@ summary.CTMCdive <- function(mod) {
   print(mod$forms[[2]])
   if (mod$model != "iid") {
     cat("with cubic shrinkage smooth for ")
-    if (mod$lambda[1] > 1e-10) cat("dive duration")
-    if (mod$lambda[1] > 1e-10 & mod$lambda[3] > 1e-10) cat(" and ")
-    if (mod$lambda[3] > 1e-10) cat("surfacing duration")
+    if (mod$lambda[1] > 1e-10) cat("dive intensity")
+    if (mod$lambda[1] > 1e-10 & mod$lambda[2] > 1e-10) cat(" and ")
+    if (mod$lambda[2] > 1e-10) cat("surfacing intensity")
     cat(".")
   }
   cat("\n")
   cat(rep("-", 30), "\n")
-  cat("MEAN SURFACE DURATION\n")
-  dive <- mod$res$dive
-  dive[,c(1, 3, 4)] <- -dive[,c(1, 4, 3)]
-  print(dive)
+  cat("DIVE INTENSITY\n")
+  print(mod$res$dive)
   cat("\n")
   cat(rep("-", 30), "\n")
-  cat("MEAN DIVE DURATION\n")
-  surf <- mod$res$surface
-  surf[, c(1, 3, 4)] <- -surf[, c(1, 4, 3)]
-  print(surf)
+  cat("SURFACE INTENSITY\n")
+  print(mod$res$surface)
   cat("\n")
   invisible(mod)
  }
@@ -248,45 +245,52 @@ print.CTMCdive <- summary.CTMCdive
 predict.CTMCdive <- function(mod, newdata = NULL) {
   par <- mod$rep$par.fixed
   len <- mod$len
-  if (mod$lambda[1] > 1e-10) par <- c(0, par)
-  if (mod$lambda[2] > 1e-10) par <- c(par[1:len[1]], 0, par[(len[1]+1):length(par)])
   par_dive <- par[1:len[1]]
   par_surf <- par[(len[1] + 1):(len[1] + len[2])]
-  # get design matrices
-  if (!is.null(newdata)) {
-    forms <- mod$forms
-    Xs <- vector(mode = "list", length = 2)
-    for (i in 1:2) {
-      ind <- switch (as.character(forms[[i]][[2]]), "surface" = 2, "dive" = 1)
-      ter <- terms(forms[[i]])
-      ter <- delete.response(ter)
-      Xs[[ind]] <- model.matrix(ter, data = newdata)
-    }
-  } else {
-    Xs <- mod$Xs
-  }
+  Xs <- mod$Xs
   # linear predictors
   nu_dive <- Xs[[1]] %*% par_dive
   nu_surf <- Xs[[2]] %*% par_surf
+  # create time grid 
+  ints <- mod$sm$ints
+  nints <- length(ints)
+  lambda_dive <- rep(0, nints) 
+  lambda_surf <- rep(0, nints)
+  for (i in 1:(nrow(mod$dat) - 1)) {
+    lambda_dive[ints >= mod$dat$time[i] & ints < mod$dat$time[i + 1]] <- nu_dive[i]
+    lambda_surf[ints >= mod$dat$time[i] & ints < mod$dat$time[i + 1]] <- nu_surf[i]
+  }
+  lambda_dive[ints > mod$dat$time[nrow(mod$dat)]] <- nu_dive[length(nu_dive)]
+  lambda_surf[ints > mod$dat$time[nrow(mod$dat)]] <- nu_surf[length(nu_surf)]
   # add RW smooths if necessary
   if (mod$model != "iid") {
     npar <- sum(len)
     lambda <- mod$lambda
     if (lambda[2]>1e-10) {
       x_surf <- mod$rep$par.random[names(mod$rep$par.random) == "s_surf"]
-      nu_surf <- nu_surf + (mod$sm$A_surf %*% x_surf)
+      lambda_surf <- lambda_surf + (mod$sm$A_grid %*% x_surf)
     }
     if (lambda[1]>1e-10) {
       x_dive <- mod$rep$par.random[names(mod$rep$par.random) == "s_dive"]
-      nu_dive <- nu_dive + (mod$sm$A_dive %*% x_dive)
+      lambda_dive <- lambda_dive + (mod$sm$A_grid %*% x_dive)
     }
   }
-  # predicted durations for diving and surfacing (1/intensity)
-  mu_dive <- exp(nu_dive)
-  mu_surf <- exp(nu_surf)
-
+  lambda_dive <- exp(lambda_dive)
+  lambda_surf <- exp(lambda_surf)
+  # get expectations 
+  dt <- mean(diff(ints))
+  exp_dive <- exp_surf <- rep(0, nrow(mod$dat))
+  for (i in 1:nrow(mod$dat)) {
+    Ldive <- cumsum(lambda_dive[ints > mod$dat$time[i]])
+    Lsurf <- cumsum(lambda_surf[ints > (mod$dat$time[i] + mod$dat$dive[i])])
+    Sdive <- exp(-Ldive * dt)
+    Ssurf <- exp(-Lsurf * dt)
+    # E(dive) comes from surface intensity and vice-versa 
+    exp_dive[i] <- sum(Ssurf * dt)
+    exp_surf[i] <- sum(Sdive * dt)
+  }
   # return predictions
-  res <- list(surface = mu_surf, dive = mu_dive)
+  res <- list(surface = exp_surf, dive = exp_dive)
   return(res)
 }
 
@@ -311,9 +315,7 @@ plot.CTMCdive <- function(mod, quant = 1, pick = NULL, pred = NULL, xlim = NULL)
   # get predicted values
   if (is.null(pred)) pred <- predict(mod)
   # get maximum time if scaled
-  max.time <- 1
-  if (!is.null(attributes(mod$dat)$max.time)) max.time <- attributes(mod$dat)$max.time
-  time <- dat$time * max.time
+  time <- dat$time
   # plot fitted values over observed
   if (pick == "all" | pick == "surface") {
     q <- quantile(dat$surface, prob = quant)
@@ -338,7 +340,7 @@ plot.CTMCdive <- function(mod, quant = 1, pick = NULL, pred = NULL, xlim = NULL)
 #' if lambda > 0)
 #' @export
 logLik.CTMCdive <- function(object, ...) {
-  val <- -object$mod$objective
+  val <- -object$mod$value
   npar <- length(object$mod$par)
   llk <- val
   attributes(llk)$df <- npar

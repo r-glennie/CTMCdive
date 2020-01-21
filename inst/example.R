@@ -2,17 +2,22 @@
 library(CTMCdive)
 library(expm)
 
+## hacky simulation code 
 T <- 1000
-dt <- 0.1
+dt <- 0.01
 t <- seq(0, T, by = dt)
 n <- length(t)
-diveI <- 0.1 * (-cos(2 * pi * t / 1000) + 1)
-surfI <- 0.2 * (-cos(2 * pi * t / 1000) + 1)
+s1 <- cos(2 * pi * t / 1000)
+s1 <- s1 - mean(s1)
+diveI <- exp(log(0.05) - s1)
+s2 <- 2.3 * s1
+surfI <- exp(log(0.08) + s2)
 
-diveI <- rep(0.05, length(diveI))
-surfI <- rep(0.08, length(surfI))
+#diveI <- rep(0.05, length(diveI))
+#surfI <- rep(0.08, length(surfI))
 
-plot(t, diveI, type = "l")
+#plot(t, diveI, type = "l")
+#plot(t, surfI, type = "l")
 
 s <- rep(0, n)
 s[1] <- 1 
@@ -39,18 +44,16 @@ for (i in 2:n) {
 }
 
 # setup model 
-
 forms <- list(surface ~ 1, 
               dive ~ 1)
 
 # fit model 
-mod <- FitCTMCdive(forms, dat, model = "iid", print = TRUE)
+mod <- FitCTMCdive(forms, dat, model = "sd", print = TRUE)
 
 mod
 
+# predict durations 
+pred <- predict(mod)
 
-#pred <- mod$sm$A_grid %*% mod$rep$par.random[1:9]
-#pred <- pred + mod$rep$par.fixed[1]
-#pred <- exp(pred)
-#plot(seq(dat$time[1], dat$time[nrow(dat)] + dat$dive[nrow(dat)] + dat$surface[nrow(dat)], length = 1000), pred)
-#lines(t, diveI, col = "red")
+# plot fit 
+plot(mod)
