@@ -1,0 +1,69 @@
+% Author: Richard Glenie, Date: 31/03/18
+\documentclass[referee]{rgclass}
+\begin{document}
+\title{Alternating renewal process with continuous-time transition intensities fit by approximate marginal likelihood}
+\author{Richard Glennie}
+\affil{Unversity of St Andrews}
+
+%\abstract{
+%
+%}
+
+\maketitle
+
+\lhead{CTMC}
+\rhead{R. Glennie}
+
+% Background 
+\section{Introduction}
+
+\citet{schliep2018alternating} propose an alternating renewal process with transition intensities modelled as Gaussian processes with a Mat\'ern covariance. They fit this model using MCMC and a nearest neighbour Gaussian prior, for computational feasibility. Here, we propose the same theoretical model but, diverging from \citet{schliep2018alternating}, model the transition intensities within the standard generalized additive modelling framework: this allows for the intensities to depend smoothly on covariates other than time and allows these smooths to be selected from the variety of options available, including Gaussian processes (e.g., with Mat\'ern covariance), thin plate splines,  thin plate regression splines with or without shrinkage, tensor splines, and any other basis-penalty smooths (such as B-splines or P-splines). Together with this extension, we fit the models by restricted marginal likelihood (REML) rather than MCMC; REML makes use of the Laplace approximation and is equivalent to empirical Bayes estimation. The advantage of REML is that it provides faster inference and makes larger analyses more computationally feasible. 
+
+\section{Methods} 
+\label{sec:mod} 
+
+An alternating renewal process \citep{norris1998markov} is a stochastic process $(X_t)_t$ that can take only two distinct values; therefore, the process alternates between these two states. Without loss of generality, we label the two states $D$ and $U$, assume that $X_0 = D$, and that $X_T = U$ where $T > 0$.  Observations from this process can then take the form $(t_i, d_i, u_i)$ for $i = 1,\ldots,n$ where $n$ is the number of times the process switches to state $D$ (setting $t_0 = 0, t_{n + 1} = T$), $d_i$ is the time spent in state $D$ during $[t_i, t_{i+1}]$ and $u_i$ is the time spent in state $U$ during $[t_i, t_{i+1}]$. 
+
+We assume this process is Markov; hence, the time spent in any state is a survival process. Let $\lambda_R:[0,T] \to [0,\infty]$ be the intensity of switching to state $R \in \{D, U\}$ over time and let $S_R(u, v) = \exp\{-\int_u^v \lambda_R(t)\;\mathrm{d}t\}$ be the survival function for state $R$, i.e., the probability of not switching from state $R$ in the time interval $[u, v]$.  
+
+ It follows that, conditional on \(X_0 = D\) and \(X_T = U\),  
+\begin{itemize}
+\item $[t_0, d_0, u_0] = \lambda_U(t_0 + d_0)S_U(t_0, t_0 + d_0)$; 
+\item $[t_i, d_i, u_i] = \lambda_D(t_i)\lambda_U(t_i + d_i)S_D(t_i - u_{i - 1}, t_i)S_U(t_i, t_i + d_i)$ for $0 < i < n$; 
+\item $[t_n, d_n, u_n] = \lambda_D(t_n)S_D(t_n - u_{n - 1}, t_n)S_U(t_n, t_n + d_n)S_D(T - u_n, T)$. 
+\end{itemize}  
+ 
+
+Independence of observations follows from the Markov assumption and so $[\bm{t}, \bm{d}, \bm{u}] = \prod_{i = 1}^n [t_i, d_i, u_i]$ where $\bm{t}, \bm{d}, \bm{u}$ are vectors with $i^{\text{th}}$ entry $t_i, d_i, u_i$, respectively. 
+
+Clearly the model is specified once a form for $\lambda_R$ is specified for each state $R$. Here, we specify each intensity as a generalized additive model. Let $\log\{\lambda_R(t)\}  =  \beta_0 + \sum_{j = 1}^J \beta_jz_j(t) + \sum_{k  = 1}^K f_k(t)$ where 
+\begin{itemize}
+\item $\beta_0$ is the intercept; 
+\item $z_1, \ldots, z_J$ are functions defined on \([0,T]\) which are observed --- these are covariates; 
+\item $\beta_1, \ldots, \beta_J$ are linear effects of the covariates; 
+\item $f_1, \ldots, f_K$ are non-parametric smooths.  
+\end{itemize}
+
+The covariates $z_1, \ldots, z_J$ are assumed to be known for all times $t \in [0,T]$. It is likely in practice that some covariates will only be observed on state switches or some covariates may only have meaning for each $i$ and not all times. In both cases, we propose two solutions: (1) fit a smooth to these covariates and use the model predictions (in continuous time) as the covariate, preferably bootstrapping/posterior simulating and fitting with multiple realisations of the covariate in order to incorporate uncertainty in the reconstruction of the covariate; (2) assume the covariate is constant within each interval $[t_i, t_{i + 1}]$ for each $i$: this can either be interpreted as a piecewise constant approximation (rather than a smooth one as propsoed in (1)) or can be interpreted as implying that the effect the covariate has on durations within each state is through its value at each state switch: this may not be unreasonable if information at the time of state switching has more bearing on the behaviour of the process than the covariate value between switches.  
+
+The specification of $f_1, \ldots, f_K$ is described fully in \citet{wood2017generalized}. Specifications require a smoothing penalty and either a selected or induced basis. The smoothing penalty is equivalent to a prior on each smooth specifying that smoother functions (those with a lower penalty) are more likely to reflect the true underlying process. For example, a common smoothing penalty is the integrated squared second derivative $\mathcal{P}(f_k) = \rho_k\int \{f_k''(u)\}^2 \;\mathrm{d}u$ with smoothing parameter $\rho_k > 0$. A basis can be deduced from the chosen penalty or specified such that $f_k(u) = \sum_{b = 1}^B \alpha_{k,b}\phi_{k,b}(u)$ for parameters $\bm\alpha_k = (\alpha_{k,1}, \ldots, \alpha_{k,B})$ and known basis functions $\phi_{k,1}, \ldots, \phi_{k,B}$. Notice, we allow smooths to be defined over variables other than time, such as time-varying covariates. 
+
+Ultimately, we assume that the smooth formulation reduces to the specification that $\bm{\alpha}_k$ has a (possibly improper) multivariate Normal prior with mean zero vector and (possibly singular) precision matrix $\rho_k\bm{S}_k$ where $\bm{S}_k$, termed the smoothing penalty matrix, is a $B \times B$ matrix. For the squared second derviative penalty $S$ has $(i,j)^{\text{th}}$ entry $\int \phi_{k,i}''(u)\phi_{j,k}''(u)\;\mathrm{d}u$. Let $\bm\rho$ be the vector of smoothing parameters, which may contain more or less than $K$ as each smooth, in general, can have no penalty or more than one penalty. 
+
+Given this specification for the intensities, let $\bm\theta$ be the vector of linear effects $\beta_0, \ldots, \beta_J$ and smoothing parameters $\bm\rho$.  The parameters such as $\alpha_{k, b}$ are treated as random effects and inference on $\bm\theta$ is based on the marginal likelihood. The full likelihood is a penalized likelihood; for example, where each smooth $f_k$ has a single penalty with smoothing penalty matrix $S_k$, the full likelihood has the form $\mathcal{L}(\bm\theta, \bm\alpha_1, \ldots, \bm\alpha_K) = [\bm{t}, \bm{d}, \bm{u}]\exp\left\{-\sum_{k = 1}^K \rho_k\bm\alpha_k^\intercal S_k \bm\alpha_k\right\}$, the likelihood of the parameters given the data multiplied by an improper prior. 
+
+The marginal likelihood is then $\mathcal{L}_m(\bm\theta) = \int \mathcal{L}(\bm\theta, \bm\alpha_1, \ldots, \bm\alpha_K) \;\mathrm{d}\bm\alpha_1, \ldots,d\bm\alpha_K$. The marginal likelihood can be approximately calculated using the Laplace approximation to perform the required integration. Point estimates can then be obtained by maximising the marginal likelihood and variance in these point estimators can be estimated using the generalized delta method or posterior simulation \citep{wood2016smoothing, wood2017generalized}, incorporating uncertainty in both linear effects and smoothing parameters. 
+
+The model is implemented in R \citep{R} using the Template Model Builder package \citep{TMB} to perform the Laplace approximation. The survival functions are approximated by Riemann sums. 
+ 
+
+\bibliographystyle{chicago}
+\bibliography{ctmc_refs.bib}
+
+\end{document}
+
+
+
+
+
+
