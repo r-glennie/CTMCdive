@@ -7,20 +7,16 @@
 FitCTMCdive(forms, dat, model = "iid", print = TRUE)
 }
 \arguments{
-\item{forms}{a list with formulae for "dive" and "surface" variables}
+\item{forms}{a \code{list} with formulae for \code{dive} and \code{surface} variables}
 
-\item{dat}{a data frame with at least three columns named "dive" (dive durations), "surface" (surface durations),
-and "time" (start time of dive); all of these must be numeric.}
+\item{dat}{a \code{data.frame} with at least three columns named \code{dive} (dive durations), \code{surface} (surface durations), and \code{time} (start time of dive); all of these must be numeric.}
 
-\item{model}{"iid" fits a CTMC where durations are independent over time, "d" fits a model where dive durations are correlated,
-"s" where surface durations are correlated, and "ds" fits where both dive and surface are correlated}
+\item{model}{\code{"iid"} fits a CTMC where durations are independent over time, \code{"d"} fits a model where dive durations are correlated, \code{"s"} where surface durations are correlated, and \code{"ds"} fits where both dive and surface are correlated}
 
-\item{print}{if TRUE, useful output is printed}
+\item{print}{if \code{TRUE}, useful output is printed}
 }
 \value{
-a CTMCdive model object: a list of the estimated results (res), variance matrix (var), fitted model returned from optim (mod),
-output from sdreport (res), design matrices (Xs), smoothing data (sm), formulae (forms), indices that divide par between dive and surface parameters (len),
-data frame (dat), indicators for smooths used (lambda), and model type (model).
+
 }
 \description{
 Fits continuous-time Markov chain to dive and surface duration data

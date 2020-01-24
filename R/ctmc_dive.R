@@ -51,19 +51,15 @@ MakeSmooth <- function(dat, nk = 100, nint = 10000) {
               dt = dt)
   return(res)
 }
-  
+
 #' Fits continuous-time Markov chain to dive and surface duration data
 #'
-#' @param forms a list with formulae for "dive" and "surface" variables
-#' @param dat a data frame with at least three columns named "dive" (dive durations), "surface" (surface durations),
-#' and "time" (start time of dive); all of these must be numeric.
-#' @param model "iid" fits a CTMC where durations are independent over time, "d" fits a model where dive durations are correlated,
-#' "s" where surface durations are correlated, and "ds" fits where both dive and surface are correlated
-#' @param print if TRUE, useful output is printed
+#' @param forms a \code{list} with formulae for \code{dive} and \code{surface} variables
+#' @param dat a \code{data.frame} with at least three columns named \code{dive} (dive durations), \code{surface} (surface durations), and \code{time} (start time of dive); all of these must be numeric.
+#' @param model \code{"iid"} fits a CTMC where durations are independent over time, \code{"d"} fits a model where dive durations are correlated, \code{"s"} where surface durations are correlated, and \code{"ds"} fits where both dive and surface are correlated
+#' @param print if \code{TRUE}, useful output is printed
 #'
-#' @return a CTMCdive model object: a list of the estimated results (res), variance matrix (var), fitted model returned from optim (mod),
-#' output from sdreport (res), design matrices (Xs), smoothing data (sm), formulae (forms), indices that divide par between dive and surface parameters (len),
-#' data frame (dat), indicators for smooths used (lambda), and model type (model).
+#' @return a CTMCdive model object: a list of the estimated results (\code{res}), variance matrix (\code{var}), fitted model returned from \code{optim} (\code{mod}), output from \code{sdreport} (\code{res}), design matrices (\code{Xs}), smoothing data (\code{sm}), formulae (\code{forms{), indices that divide par between dive and surface parameters (\code{len}), data (\code{dat}), indicators for smooths used (\code{lambda}), and model type (\code{model}).
 #' @export
 #' @importFrom stats delete.response model.matrix optim
 #'             pnorm predict qnorm quantile terms
