@@ -1,8 +1,8 @@
-# Simulate data 
+# Simulate data
 library(CTMCdive)
 library(expm)
 
-## hacky simulation code 
+## hacky simulation code
 T <- 1000
 dt <- 0.01
 t <- seq(0, T, by = dt)
@@ -20,16 +20,16 @@ surfI <- exp(log(0.08) + s2)
 #plot(t, surfI, type = "l")
 
 s <- rep(0, n)
-s[1] <- 1 
+s[1] <- 1
 dat <- data.frame(ID = 1, dive = 0, surface = 0, time = 1)
-cur <- 1 
+cur <- 1
 diving <- TRUE
 for (i in 2:n) {
   trm <- matrix(c(-surfI[i], diveI[i], surfI[i], -diveI[i]), nc = 2)
   tpm <- expm(trm*dt)
   s[i] <- sample(1:2, size = 1, prob = tpm[s[i - 1],])
   if (s[i] == 1) {
-    dat$dive[cur] <- dat$dive[cur] + dt 
+    dat$dive[cur] <- dat$dive[cur] + dt
   }
   if (s[i] == 2) {
     dat$surface[cur] <- dat$surface[cur] + dt
@@ -37,23 +37,24 @@ for (i in 2:n) {
   }
   if (s[i] == 1 & !diving) {
     dat <- rbind(dat, data.frame(ID = 1, dive = 0, surface = 0, time = i*dt))
-    cur <- cur + 1 
+    cur <- cur + 1
     diving <- TRUE
   }
-  
+
 }
 
-# setup model 
-forms <- list(surface ~ 1, 
+
+# setup model
+forms <- list(surface ~ 1,
               dive ~ 1)
 
-# fit model 
+# fit model
 mod <- FitCTMCdive(forms, dat, model = "sd", print = TRUE)
 
 mod
 
-# predict durations 
+# predict durations
 pred <- predict(mod)
 
-# plot fit 
+# plot fit
 plot(mod)
