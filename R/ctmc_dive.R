@@ -20,9 +20,8 @@ MakeSmooth <- function(forms, dat, nk = 100, nint = 10000) {
   # GAM setup
   gam_dive <- gam(forms[["dive"]], data = dat, method = "REML")
   # extract smoothing matrix
-  S_dive <- gam_dive$smooth[[1]]$S
-  if(length(S_dive) > 0){
-    res$S_dive <- as(S_dive[[1]], "sparseMatrix")
+  if(length(gam_dive$smooth) > 0){
+    res$S_dive <- as(gam_dive$smooth[[1]]$S[[1]], "sparseMatrix")
   }
   # build design matrix
   res$A_dive <- predict(gam_dive, newdata = data.frame(time = dat$time),
@@ -32,9 +31,8 @@ MakeSmooth <- function(forms, dat, nk = 100, nint = 10000) {
   # GAM setup
   gam_surface <- gam(forms[["surface"]], data = dat, method = "REML")
   # extract smoothing matrix
-  S_surface <- gam_surface$smooth[[1]]$S
-  if(length(S_surface) > 0){
-    res$S_surface <- as(S_surface[[1]], "sparseMatrix")
+  if(length(gam_surface$smooth) > 0){
+    res$S_surface <- as(gam_surface$smooth[[1]]$S[[1]], "sparseMatrix")
   }
   # build design matrix
   res$A_surf <- predict(gam_surface,
@@ -141,7 +139,8 @@ FitCTMCdive <- function(forms, dat, print = TRUE) {
   if (is.null(sm$S_dive)) {
     map <- c(map, list(log_lambda_dive = as.factor(NA),
                        s_dive = factor(NA)))
-    sm$S_dive <- as(matrix(0, 1,1), "sparseMatrix")
+    tmb_parameters$s_dive <- 0
+    sm$S_dive <- as(matrix(0, 1, 1), "sparseMatrix")
   } else {
     random <- c(random, "s_dive")
     tmb_parameters$s_dive <- rep(0, ncol(sm$S_dive))
@@ -149,7 +148,8 @@ FitCTMCdive <- function(forms, dat, print = TRUE) {
   if (is.null(sm$S_surface)) {
     map <- c(map, list(log_lambda_surf = as.factor(NA),
                        s_surf = factor(NA)))
-    sm$S_surface <- as(matrix(0, 1,1), "sparseMatrix")
+    tmb_parameters$s_surf <- 0
+    sm$S_surface <- as(matrix(0, 1, 1), "sparseMatrix")
   } else {
     random <- c(random, "s_surf")
     tmb_parameters$s_surf <- rep(0, ncol(sm$S_surface))
@@ -202,10 +202,10 @@ FitCTMCdive <- function(forms, dat, print = TRUE) {
   s <- 1
   e <- len[1]
   res_dive <- data.frame(Est. = est[s:e],
-                           SD. = sds[s:e],
-                           LCL. = LCL[s:e],
-                           UCL. = UCL[s:e],
-                           p_value = pval[s:e])
+                         SD. = sds[s:e],
+                         LCL. = LCL[s:e],
+                         UCL. = UCL[s:e],
+                         p_value = pval[s:e])
   rownames(res_dive) <- colnames(Xs[[1]])
 
   # surface result
@@ -230,8 +230,7 @@ FitCTMCdive <- function(forms, dat, print = TRUE) {
               sm = sm,
               forms = forms,
               len = len,
-              dat = dat,
-              #lambda = lambda,
+              dat = dat
              )
   if(print) cat("done\n")
   class(ans) <- "CTMCdive"
