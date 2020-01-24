@@ -5,7 +5,7 @@ context("FitCTMCdive")
 # load data etc
 library(CTMCdive)
 
-load(system.file("inst/simdat.RData", package="CTMCdive"))
+load(system.file("simdat.RData", package="CTMCdive"))
 
 test_that("point estimates are correct",{
   forms <- list(surface ~ 1,
