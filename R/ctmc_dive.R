@@ -2,30 +2,35 @@
 
 #' Compute matrices required to fit temporal smooth
 #'
+#' @param forms formulae
 #' @param dat data frame (see fitCTMCdive)
 #' @param nk number of knots (UNUSED)
 #' @param nint number of integration points
 #'
-#' @return list of mesh, SPDE objects, point A matrices, and integral A matrices 
+#' @return list of mesh, SPDE objects, point A matrices, and integral A matrices
 #' @export
 #' @importFrom mgcv gam predict.gam
 #' @importFrom methods as
-MakeSmooth <- function(dat, nk = 100, nint = 10000) {
+MakeSmooth <- function(forms, dat, nk = 100, nint = 10000) {
   # get gam data
-  gamdat <- gam(dive ~ s(time, bs = "cs"), data = dat, fit = FALSE, method = "REML")
+  gamdat <- gam(dive ~ s(time, bs = "cs"), data = dat, method = "REML")
   # extract smoothing matrix
-  S <- as(gamdat$S[[1]], "sparseMatrix")
-  # fit dummy model
-  gamdat2 <- gam(dive ~ s(time, bs = "cs"), data = dat, fit = TRUE, method = "REML")
+  S <- as(gamdat$smooth[[1]]$S[[1]], "sparseMatrix")
+
   # construct prediction grid
   n <- nrow(dat)
-  ints <- seq(dat$time[1], dat$time[n] + dat$dive[n] + dat$surface[n], length = nint)
+  ints <- seq(dat$time[1], dat$time[n] + dat$dive[n] + dat$surface[n],
+              length = nint)
   # spacing on prediction grid
   dt <- mean(diff(ints))
   # predictor matrices
-  A_dive <- predict(gamdat2, newdata = data.frame(time = dat$time), type = "lpmatrix")[,-1]
-  A_surf <- predict(gamdat2, newdata = data.frame(time = dat$time + dat$dive), type = "lpmatrix")[,-1]
-  A_grid <- predict(gamdat2, newdata = data.frame(time = ints), type = "lpmatrix")[,-1]
+  A_dive <- predict(gamdat, newdata = data.frame(time = dat$time),
+                    type = "lpmatrix")[,-1]
+  A_surf <- predict(gamdat, newdata = data.frame(time = dat$time + dat$dive),
+                    type = "lpmatrix")[,-1]
+  A_grid <- predict(gamdat, newdata = data.frame(time = ints),
+                    type = "lpmatrix")[,-1]
+
   # get integration matrices
   indD <- indS <- matrix(0, nrow = n, ncol = nint)
   dive_end <- dat$time + dat$dive
@@ -88,7 +93,8 @@ FitCTMCdive <- function(forms, dat, model = "iid", print = TRUE) {
   # smoothing data
   random <- NULL
   map <- list()
-  sm <- MakeSmooth(dat)
+
+  sm <- MakeSmooth(forms, dat)
   n_mesh <- ncol(sm$S)
   lambda <- rep(0, 2)
   if (model != "iid") {
@@ -99,7 +105,7 @@ FitCTMCdive <- function(forms, dat, model = "iid", print = TRUE) {
 
   ## Setup TMB parameter list
   tmb_parameters <- list(par_dive = par[1:len[1]],
-                         par_surf = par[(len[1] + 1): length(par)],
+                         par_surf = par[(len[1] + 1):length(par)],
                          log_lambda_dive = 0,
                          log_lambda_surf = 0,
                          s_dive = rep(0, n_mesh),
@@ -110,15 +116,15 @@ FitCTMCdive <- function(forms, dat, model = "iid", print = TRUE) {
     random <- c(random, "s_dive")
     tmb_parameters$s_dive <- rep(0, n_mesh)
   } else {
-    map <- c(map,  list(log_lambda_dive = as.factor(NA),
-                        s_dive = factor(rep(NA, n_mesh))))
+    map <- c(map, list(log_lambda_dive = as.factor(NA),
+                       s_dive = factor(rep(NA, n_mesh))))
   }
   if (!(lambda[2] < 1e-10)) {
     random <- c(random, "s_surf")
     tmb_parameters$s_surf <- rep(0, n_mesh)
   } else {
-    map <- c(map,  list(log_lambda_surf = as.factor(NA),
-                        s_surf = factor(rep(NA, n_mesh))))
+    map <- c(map, list(log_lambda_surf = as.factor(NA),
+                       s_surf = factor(rep(NA, n_mesh))))
   }
 
   ## Setup TMB data list
@@ -133,16 +139,17 @@ FitCTMCdive <- function(forms, dat, model = "iid", print = TRUE) {
                   dt = sm$dt)
 
   ## Create object
-  obj <- MakeADFun(tmb_dat, tmb_parameters, random = random, map = map, hessian = TRUE, DLL = "ctmc_dive")
+  obj <- MakeADFun(tmb_dat, tmb_parameters, random = random, map = map,
+                   hessian = TRUE, DLL = "ctmc_dive")
 
-  ## Fit Model 
+  ## Fit Model
   if (print) cat("Fitting model.......\n")
   t0 <- Sys.time()
   mod <- do.call(optim, obj)
   t1 <- Sys.time()
   diff <- difftime(t1, t0)
   if(print) cat("Model fit in ", signif(diff[[1]], 2), attr(diff, "units"), "\n")
-  # 
+
   ## Compute estimates
   if(print) cat("Estimating variance.......")
   npar <- sum(len)
@@ -151,16 +158,16 @@ FitCTMCdive <- function(forms, dat, model = "iid", print = TRUE) {
   var <- rep$cov.fixed
   sds <- sqrt(diag(var))
   if(print) cat("done\n")
-  # 
+
   # confidence intervals
   if(print) cat("Computing confidence intervals.......")
   LCL <- est - qnorm(0.975) * sds
   UCL <- est + qnorm(0.975) * sds
   if(print) cat("done\n")
-  # 
+
   # pvalues
   pval <- 2 * pnorm(-abs(est), 0, sds)
-  # 
+
   #  dive result
   if(print) cat("Formatting results.......")
   s <- 1
@@ -189,13 +196,13 @@ FitCTMCdive <- function(forms, dat, model = "iid", print = TRUE) {
   ans <- list(res = res,
               var = var,
               mod = mod,
-              rep = rep, 
+              rep = rep,
               Xs = Xs,
-              sm = sm, 
+              sm = sm,
               forms = forms,
               len = len,
               dat = dat,
-              lambda = lambda, 
+              lambda = lambda,
               model = model)
   if(print) cat("done\n")
   class(ans) <- "CTMCdive"
