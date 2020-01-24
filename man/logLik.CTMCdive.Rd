@@ -9,7 +9,7 @@
 \arguments{
 \item{object}{fitted CTMCdive object}
 
-\item{...}{}
+\item{\dots}{unused (for S3 compatability)}
 }
 \value{
 logLik with df attribute

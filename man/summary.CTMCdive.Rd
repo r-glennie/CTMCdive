@@ -4,10 +4,12 @@
 \alias{summary.CTMCdive}
 \title{Print summary of CTMCdive object}
 \usage{
-\method{summary}{CTMCdive}(mod)
+\method{summary}{CTMCdive}(object, ...)
 }
 \arguments{
-\item{mod}{the CTMCdive fitted model object}
+\item{object}{the CTMCdive fitted model object}
+
+\item{\dots}{unused (for S3 compatability)}
 }
 \value{
 prints a summary

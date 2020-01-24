@@ -4,25 +4,26 @@
 \alias{plot.CTMCdive}
 \title{Plot fitted CTMCdive model}
 \usage{
-plot.CTMCdive(mod, quant = 1, pick = NULL, pred = NULL,
-  xlim = NULL)
+\method{plot}{CTMCdive}(x, quant = 1, pick = NULL, pred = NULL, xlim = NULL, ...)
 }
 \arguments{
-\item{mod}{fitted CTMCdive model object}
+\item{x}{fitted CTMCdive model object}
 
 \item{quant}{the quantile to plot the observed data up to, for example if set to 0.95 then
-only the durations upto the 95% quantile are plotted (prevents outliers dominating the plot)}
+only the durations up to the 95\% quantile are plotted (prevents outliers dominating the plot)}
 
-\item{pick}{if not NULL then either "dive" or "surface" if only want a plot of one of the fitted
+\item{pick}{if not \code{NULL} then either "dive" or "surface" if only want a plot of one of the fitted
 processes}
 
 \item{pred}{if predicted means already computed can supply them here rather than have them recomputed}
 
 \item{xlim}{limits for x axis if you want to restrict range}
+
+\item{\dots}{unused (for S3 compatability)}
 }
 \value{
-plots of dive and surface durations or only one of if "pick" is used
+plots of dive and surface durations or only one of if "\code{pick}" is specified
 }
 \description{
-Plot fitted CTMCdive model
+Plot models fitted by \code{CTMCdive}.
 }

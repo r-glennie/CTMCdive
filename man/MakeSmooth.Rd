@@ -4,15 +4,17 @@
 \alias{MakeSmooth}
 \title{Compute matrices required to fit temporal smooth}
 \usage{
-MakeSmooth(dat, nknots = NULL)
+MakeSmooth(dat, nk = 100, nint = 10000)
 }
 \arguments{
 \item{dat}{data frame (see fitCTMCdive)}
 
-\item{nknots}{number of basis functions / knots}
+\item{nk}{number of knots (UNUSED)}
+
+\item{nint}{number of integration points}
 }
 \value{
-INLA finite element matrices required to fit smooth
+list of mesh, SPDE objects, point A matrices, and integral A matrices
 }
 \description{
 Compute matrices required to fit temporal smooth

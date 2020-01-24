@@ -4,12 +4,14 @@
 \alias{predict.CTMCdive}
 \title{Predict mean duration from fitted CTMC model for dives and surfacing}
 \usage{
-\method{predict}{CTMCdive}(mod, newdata = NULL)
+\method{predict}{CTMCdive}(object, newdata = NULL, ...)
 }
 \arguments{
-\item{mod}{CTMCdive fitted model object}
+\item{object}{CTMCdive fitted model object}
 
 \item{newdata}{new data frame to make predictions for}
+
+\item{\dots}{unused (for S3 compatability)}
 }
 \value{
 a list of surface and dive mean predictions
