@@ -13,22 +13,31 @@
 #' @importFrom methods as
 MakeSmooth <- function(forms, dat, nk = 100, nint = 10000) {
 
+  # results list
+  res <- list()
+
   ## dive model
   # GAM setup
   gam_dive <- gam(forms[["dive"]], data = dat, method = "REML")
   # extract smoothing matrix
-  S_dive <- as(gam_dive$smooth[[1]]$S[[1]], "sparseMatrix")
+  S_dive <- gam_dive$smooth[[1]]$S
+  if(length(S_dive) > 0){
+    res$S_dive <- as(S_dive[[1]], "sparseMatrix")
+  }
   # build design matrix
-  A_dive <- predict(gam_dive, newdata = data.frame(time = dat$time),
+  res$A_dive <- predict(gam_dive, newdata = data.frame(time = dat$time),
                     type = "lpmatrix")[,-1]
 
   ## surface model
   # GAM setup
   gam_surface <- gam(forms[["surface"]], data = dat, method = "REML")
   # extract smoothing matrix
-  S_surface <- as(gam_surface$smooth[[1]]$S[[1]], "sparseMatrix")
+  S_surface <- gam_surface$smooth[[1]]$S
+  if(length(S_surface) > 0){
+    res$S_surface <- as(S_surface[[1]], "sparseMatrix")
+  }
   # build design matrix
-  A_surf <- predict(gam_surface,
+  res$A_surf <- predict(gam_surface,
                     newdata = data.frame(time = dat$time + dat$dive),
                     type = "lpmatrix")[,-1]
 
@@ -40,8 +49,8 @@ MakeSmooth <- function(forms, dat, nk = 100, nint = 10000) {
   dt <- mean(diff(ints))
 
   # predictor matrix
-  A_grid <- predict(gam_dive, newdata = data.frame(time = ints),
-                    type = "lpmatrix")[,-1]
+  res$A_grid <- predict(gam_dive, newdata = data.frame(time = ints),
+                        type = "lpmatrix")[,-1]
 
   # get integration matrices
   indD <- indS <- matrix(0, nrow = n, ncol = nint)
@@ -56,17 +65,12 @@ MakeSmooth <- function(forms, dat, nk = 100, nint = 10000) {
       indS[wh, i] <- 1
     }
   }
-  indD <- as(indD, "sparseMatrix")
-  indS <- as(indS, "sparseMatrix")
-  res <- list(S_dive = S_dive,
-              S_surface = S_surface,
-              A_dive = A_dive,
-              A_surf = A_surf,
-              A_grid = A_grid,
-              indD = indD,
-              indS = indS,
-              ints = ints,
-              dt = dt)
+  res$indD <- as(indD, "sparseMatrix")
+  res$indS <- as(indS, "sparseMatrix")
+
+  res$ints <- ints
+  res$dt <- dt
+
   return(res)
 }
 
@@ -74,7 +78,6 @@ MakeSmooth <- function(forms, dat, nk = 100, nint = 10000) {
 #'
 #' @param forms a \code{list} with formulae for \code{dive} and \code{surface} variables
 #' @param dat a \code{data.frame} with at least three columns named \code{dive} (dive durations), \code{surface} (surface durations), and \code{time} (start time of dive); all of these must be numeric.
-#' @param model \code{"iid"} fits a CTMC where durations are independent over time, \code{"d"} fits a model where dive durations are correlated, \code{"s"} where surface durations are correlated, and \code{"ds"} fits where both dive and surface are correlated
 #' @param print if \code{TRUE}, useful output is printed
 #'
 #' @return a CTMCdive model object: a list of the estimated results (\code{res}), variance matrix (\code{var}), fitted model returned from \code{optim} (\code{mod}), output from \code{sdreport} (\code{res}), design matrices (\code{Xs}), smoothing data (\code{sm}), formulae (\code{forms{), indices that divide par between dive and surface parameters (\code{len}), data (\code{dat}), indicators for smooths used (\code{lambda}), and model type (\code{model}).
@@ -83,7 +86,7 @@ MakeSmooth <- function(forms, dat, nk = 100, nint = 10000) {
 #'             pnorm predict qnorm quantile terms
 #' @importFrom TMB MakeADFun sdreport
 #' @useDynLib ctmc_dive
-FitCTMCdive <- function(forms, dat, model = "iid", print = TRUE) {
+FitCTMCdive <- function(forms, dat, print = TRUE) {
   ## Make design matrices and parameter vector
   if (print) cat("Computing design matrices.......")
   Xs <- vector(mode = "list", length = 2)
@@ -123,39 +126,33 @@ FitCTMCdive <- function(forms, dat, model = "iid", print = TRUE) {
   map <- list()
 
   sm <- MakeSmooth(forms, dat)
-  n_mesh_surface <- ncol(sm$S_surface)
-  n_mesh_dive <- ncol(sm$S_dive)
-  lambda <- rep(0, 2)
+  #n_mesh_surface <- ncol(sm$S_surface)
+  #n_mesh_dive <- ncol(sm$S_dive)
 
   # TODO: use MakeSmooth to set this up
-  if (model != "iid") {
-    if (model == "d") lambda[1] <- 1
-    if (model == "s") lambda[2] <- 1
-    if (model == "ds" | model == "sd") lambda[1:2] <- 1
-  }
 
   ## Setup TMB parameter list
   tmb_parameters <- list(par_dive = par[1:len[1]],
                          par_surf = par[(len[1] + 1):length(par)],
                          log_lambda_dive = 0,
-                         log_lambda_surf = 0,
-                         s_dive = rep(0, n_mesh_dive),
-                         s_surf = rep(0, n_mesh_surface))
+                         log_lambda_surf = 0)
 
   ## Create TMB model object
-  if (!(lambda[1] < 1e-10)) {
-    random <- c(random, "s_dive")
-    tmb_parameters$s_dive <- rep(0, n_mesh_dive)
-  } else {
+  if (is.null(sm$S_dive)) {
     map <- c(map, list(log_lambda_dive = as.factor(NA),
-                       s_dive = factor(rep(NA, n_mesh_dive))))
-  }
-  if (!(lambda[2] < 1e-10)) {
-    random <- c(random, "s_surf")
-    tmb_parameters$s_surf <- rep(0, n_mesh_surface)
+                       s_dive = factor(NA)))
+    sm$S_dive <- as(matrix(0, 1,1), "sparseMatrix")
   } else {
+    random <- c(random, "s_dive")
+    tmb_parameters$s_dive <- rep(0, ncol(sm$S_dive))
+  }
+  if (is.null(sm$S_surface)) {
     map <- c(map, list(log_lambda_surf = as.factor(NA),
-                       s_surf = factor(rep(NA, n_mesh_surface))))
+                       s_surf = factor(NA)))
+    sm$S_surface <- as(matrix(0, 1,1), "sparseMatrix")
+  } else {
+    random <- c(random, "s_surf")
+    tmb_parameters$s_surf <- rep(0, ncol(sm$S_surface))
   }
 
   ## Setup TMB data list
@@ -234,8 +231,8 @@ FitCTMCdive <- function(forms, dat, model = "iid", print = TRUE) {
               forms = forms,
               len = len,
               dat = dat,
-              lambda = lambda,
-              model = model)
+              #lambda = lambda,
+             )
   if(print) cat("done\n")
   class(ans) <- "CTMCdive"
   return(ans)
@@ -255,13 +252,14 @@ summary.CTMCdive <- function(object, ...) {
   cat("Model fit:\n")
   print(object$forms[[1]])
   print(object$forms[[2]])
-  if (object$model != "iid") {
-    cat("with cubic shrinkage smooth for ")
-    if (object$lambda[1] > 1e-10) cat("dive intensity")
-    if (object$lambda[1] > 1e-10 & object$lambda[2] > 1e-10) cat(" and ")
-    if (object$lambda[2] > 1e-10) cat("surfacing intensity")
-    cat(".")
-  }
+  # TODO: rewrite this!!!
+  #if (object$model != "iid") {
+  #  cat("with cubic shrinkage smooth for ")
+  #  if (object$lambda[1] > 1e-10) cat("dive intensity")
+  #  if (object$lambda[1] > 1e-10 & object$lambda[2] > 1e-10) cat(" and ")
+  #  if (object$lambda[2] > 1e-10) cat("surfacing intensity")
+  #  cat(".")
+  #}
   cat("\n")
   cat(rep("-", 30), "\n")
   cat("DIVE INTENSITY\n")
@@ -305,6 +303,7 @@ predict.CTMCdive <- function(object, newdata = NULL, ...) {
   lambda_dive[ints > object$dat$time[nrow(object$dat)]] <- nu_dive[length(nu_dive)]
   lambda_surf[ints > object$dat$time[nrow(object$dat)]] <- nu_surf[length(nu_surf)]
   # add RW smooths if necessary
+  # TODO: this needs to be fixed!!
   if (object$model != "iid") {
     npar <- sum(len)
     lambda <- object$lambda
