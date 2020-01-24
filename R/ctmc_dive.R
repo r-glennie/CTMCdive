@@ -167,7 +167,6 @@ FitCTMCdive <- function(forms, dat, model = "iid", print = TRUE) {
                            LCL. = LCL[s:e],
                            UCL. = UCL[s:e],
                            p_value = pval[s:e])
-  res_dive <- signif(res_dive, 4)
   rownames(res_dive) <- colnames(Xs[[1]])
 
   # surface result
@@ -178,7 +177,6 @@ FitCTMCdive <- function(forms, dat, model = "iid", print = TRUE) {
                          LCL. = LCL[s:e],
                          UCL. = UCL[s:e],
                          p_value = pval[s:e])
-  res_surf <- signif(res_surf, 4)
   rownames(res_surf) <- colnames(Xs[[2]])
 
 
@@ -224,11 +222,11 @@ summary.CTMCdive <- function(mod) {
   cat("\n")
   cat(rep("-", 30), "\n")
   cat("DIVE INTENSITY\n")
-  print(mod$res$dive)
+  print(signif(mod$res$dive, 4))
   cat("\n")
   cat(rep("-", 30), "\n")
   cat("SURFACE INTENSITY\n")
-  print(mod$res$surface)
+  print(signif(mod$res$surface, 4))
   cat("\n")
   invisible(mod)
  }
