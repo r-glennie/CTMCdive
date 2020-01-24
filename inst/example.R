@@ -45,11 +45,12 @@ for (i in 2:n) {
 
 
 # setup model
-forms <- list(surface ~ 1,
-              dive ~ 1)
+forms <- list(surface ~ s(time, bs="cs"),
+              dive ~ s(time, bs="cs"))
 
 # fit model
-mod <- FitCTMCdive(forms, dat, model = "sd", print = TRUE)
+simdat <- dat
+mod <- FitCTMCdive(forms, simdat, model = "sd", print = TRUE)
 
 mod
 

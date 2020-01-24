@@ -12,10 +12,25 @@
 #' @importFrom mgcv gam predict.gam
 #' @importFrom methods as
 MakeSmooth <- function(forms, dat, nk = 100, nint = 10000) {
-  # get gam data
-  gamdat <- gam(dive ~ s(time, bs = "cs"), data = dat, method = "REML")
+
+  ## dive model
+  # GAM setup
+  gam_dive <- gam(forms[["dive"]], data = dat, method = "REML")
   # extract smoothing matrix
-  S <- as(gamdat$smooth[[1]]$S[[1]], "sparseMatrix")
+  S_dive <- as(gam_dive$smooth[[1]]$S[[1]], "sparseMatrix")
+  # build design matrix
+  A_dive <- predict(gam_dive, newdata = data.frame(time = dat$time),
+                    type = "lpmatrix")[,-1]
+
+  ## surface model
+  # GAM setup
+  gam_surface <- gam(forms[["surface"]], data = dat, method = "REML")
+  # extract smoothing matrix
+  S_surface <- as(gam_surface$smooth[[1]]$S[[1]], "sparseMatrix")
+  # build design matrix
+  A_surf <- predict(gam_surface,
+                    newdata = data.frame(time = dat$time + dat$dive),
+                    type = "lpmatrix")[,-1]
 
   # construct prediction grid
   n <- nrow(dat)
@@ -23,12 +38,9 @@ MakeSmooth <- function(forms, dat, nk = 100, nint = 10000) {
               length = nint)
   # spacing on prediction grid
   dt <- mean(diff(ints))
-  # predictor matrices
-  A_dive <- predict(gamdat, newdata = data.frame(time = dat$time),
-                    type = "lpmatrix")[,-1]
-  A_surf <- predict(gamdat, newdata = data.frame(time = dat$time + dat$dive),
-                    type = "lpmatrix")[,-1]
-  A_grid <- predict(gamdat, newdata = data.frame(time = ints),
+
+  # predictor matrix
+  A_grid <- predict(gam_dive, newdata = data.frame(time = ints),
                     type = "lpmatrix")[,-1]
 
   # get integration matrices
@@ -46,7 +58,8 @@ MakeSmooth <- function(forms, dat, nk = 100, nint = 10000) {
   }
   indD <- as(indD, "sparseMatrix")
   indS <- as(indS, "sparseMatrix")
-  res <- list(S = S,
+  res <- list(S_dive = S_dive,
+              S_surface = S_surface,
               A_dive = A_dive,
               A_surf = A_surf,
               A_grid = A_grid,
@@ -77,15 +90,30 @@ FitCTMCdive <- function(forms, dat, model = "iid", print = TRUE) {
   par <- NULL
   len <- rep(0, 2)
   b <- 0
-  for (i in 1:2) {
-    ind <- switch (as.character(forms[[i]][[2]]), "surface" = 2, "dive" = 1)
-    ter <- terms(forms[[i]])
-    ter <- delete.response(ter)
-    Xs[[ind]] <- model.matrix(ter, data = dat)
-    len[ind] <- ncol(Xs[[ind]])
-    par <- c(par, rep(0, len[ind]))
-    b <- b + len[ind]
-  }
+  #for (i in 1:2) {
+  #  ind <- switch (as.character(forms[[i]][[2]]), "surface" = 2, "dive" = 1)
+  #  ter <- terms(forms[[i]])
+  #  ter <- delete.response(ter)
+  #  Xs[[ind]] <- model.matrix(ter, data = dat)
+  #  len[ind] <- ncol(Xs[[ind]])
+  #  par <- c(par, rep(0, len[ind]))
+  #  b <- b + len[ind]
+  #}
+  # TODO: this is very clumsy re-write of the above, in future:
+  #       use MakeSmooth to set this up
+  Xs[[2]] <- model.matrix(~1, data = dat)
+  len[2] <- ncol(Xs[[2]])
+  par <- c(par, rep(0, len[2]))
+  b <- b + len[2]
+  Xs[[1]] <- model.matrix(~1, data = dat)
+  len[1] <- ncol(Xs[[1]])
+  par <- c(par, rep(0, len[1]))
+  b <- b + len[1]
+
+  # name that list
+  names(forms) <- c(as.character(forms[[1]][[2]]),
+                    as.character(forms[[2]][[2]]))
+
   par[1] <- -log(mean(dat$dive))
   par[len[1] + 1] <- -log(mean(dat$surface))
   if(print) cat("done\n")
@@ -95,8 +123,11 @@ FitCTMCdive <- function(forms, dat, model = "iid", print = TRUE) {
   map <- list()
 
   sm <- MakeSmooth(forms, dat)
-  n_mesh <- ncol(sm$S)
+  n_mesh_surface <- ncol(sm$S_surface)
+  n_mesh_dive <- ncol(sm$S_dive)
   lambda <- rep(0, 2)
+
+  # TODO: use MakeSmooth to set this up
   if (model != "iid") {
     if (model == "d") lambda[1] <- 1
     if (model == "s") lambda[2] <- 1
@@ -108,29 +139,30 @@ FitCTMCdive <- function(forms, dat, model = "iid", print = TRUE) {
                          par_surf = par[(len[1] + 1):length(par)],
                          log_lambda_dive = 0,
                          log_lambda_surf = 0,
-                         s_dive = rep(0, n_mesh),
-                         s_surf = rep(0, n_mesh))
+                         s_dive = rep(0, n_mesh_dive),
+                         s_surf = rep(0, n_mesh_surface))
 
   ## Create TMB model object
   if (!(lambda[1] < 1e-10)) {
     random <- c(random, "s_dive")
-    tmb_parameters$s_dive <- rep(0, n_mesh)
+    tmb_parameters$s_dive <- rep(0, n_mesh_dive)
   } else {
     map <- c(map, list(log_lambda_dive = as.factor(NA),
-                       s_dive = factor(rep(NA, n_mesh))))
+                       s_dive = factor(rep(NA, n_mesh_dive))))
   }
   if (!(lambda[2] < 1e-10)) {
     random <- c(random, "s_surf")
-    tmb_parameters$s_surf <- rep(0, n_mesh)
+    tmb_parameters$s_surf <- rep(0, n_mesh_surface)
   } else {
     map <- c(map, list(log_lambda_surf = as.factor(NA),
-                       s_surf = factor(rep(NA, n_mesh))))
+                       s_surf = factor(rep(NA, n_mesh_surface))))
   }
 
   ## Setup TMB data list
   tmb_dat <- list(Xdive = Xs[[1]],
                   Xsurf = Xs[[2]],
-                  S = sm$S,
+                  S_dive = sm$S_dive,
+                  S_surface = sm$S_surface,
                   A_dive = sm$A_dive,
                   A_surf = sm$A_surf,
                   A_grid = sm$A_grid,

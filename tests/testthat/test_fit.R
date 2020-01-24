@@ -8,8 +8,8 @@ library(CTMCdive)
 load(system.file("simdat.RData", package="CTMCdive"))
 
 test_that("point estimates are correct",{
-  forms <- list(surface ~ 1,
-                dive ~ 1)
+  forms <- list(surface ~ s(time, bs="cs"),
+                dive ~ s(time, bs="cs"))
 
   # fit model
   mod <- FitCTMCdive(forms, simdat, model = "sd", print = FALSE)
