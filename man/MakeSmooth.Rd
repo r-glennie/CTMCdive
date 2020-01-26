@@ -4,12 +4,12 @@
 \alias{MakeSmooth}
 \title{Compute matrices required to fit temporal smooth}
 \usage{
-MakeSmooth(dat, nk = 100, nint = 10000)
+MakeSmooth(forms, dat, nint = 10000)
 }
 \arguments{
-\item{dat}{data frame (see fitCTMCdive)}
+\item{forms}{formulae}
 
-\item{nk}{number of knots (UNUSED)}
+\item{dat}{data frame (see fitCTMCdive)}
 
 \item{nint}{number of integration points}
 }

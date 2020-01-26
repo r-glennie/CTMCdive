@@ -4,14 +4,13 @@
 #'
 #' @param forms formulae
 #' @param dat data frame (see fitCTMCdive)
-#' @param nk number of knots (UNUSED)
 #' @param nint number of integration points
 #'
 #' @return list of mesh, SPDE objects, point A matrices, and integral A matrices
 #' @export
 #' @importFrom mgcv gam predict.gam
 #' @importFrom methods as
-MakeSmooth <- function(forms, dat, nk = 100, nint = 10000) {
+MakeSmooth <- function(forms, dat, nint = 10000) {
 
   # results list
   res <- list()
@@ -36,12 +35,13 @@ MakeSmooth <- function(forms, dat, nk = 100, nint = 10000) {
   }
   # build design matrix
   res$A_surf <- predict(gam_surface,
-                    newdata = data.frame(time = dat$time + dat$dive),
-                    type = "lpmatrix")[,-1]
+                        newdata = data.frame(time = dat$time + dat$dive),
+                        type = "lpmatrix")[,-1]
 
   # construct prediction grid
   n <- nrow(dat)
-  ints <- seq(dat$time[1], dat$time[n] + dat$dive[n] + dat$surface[n],
+  ints <- seq(dat$time[1],
+              dat$time[n] + dat$dive[n] + dat$surface[n],
               length = nint)
   # spacing on prediction grid
   dt <- mean(diff(ints))
