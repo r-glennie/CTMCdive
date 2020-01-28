@@ -281,9 +281,11 @@ predict.CTMCdive <- function(object, newdata = NULL, ...) {
   len <- object$len
   par_dive <- par[1:len[1]]
   par_surf <- par[(len[1] + 1):(len[1] + len[2])]
+
   # linear predictors
-  nu_dive <- Xs_dive %*% par_dive
-  nu_surf <- Xs_surface %*% par_surf
+  nu_dive <- object$Xs_dive %*% par_dive
+  nu_surf <- object$Xs_surface %*% par_surf
+
   # create time grid
   ints <- object$sm$ints
   nints <- length(ints)
@@ -297,17 +299,13 @@ predict.CTMCdive <- function(object, newdata = NULL, ...) {
   lambda_surf[ints > object$dat$time[nrow(object$dat)]] <- nu_surf[length(nu_surf)]
 
   # TODO: this needs to be fixed!!
-  if (object$model != "iid") {
-    npar <- sum(len)
-    lambda <- object$lambda
-    if (lambda[2]>1e-10) {
-      x_surf <- object$rep$par.random[names(object$rep$par.random) == "s_surf"]
-      lambda_surf <- lambda_surf + (object$sm$A_grid %*% x_surf)
-    }
-    if (lambda[1]>1e-10) {
-      x_dive <- object$rep$par.random[names(object$rep$par.random) == "s_dive"]
-      lambda_dive <- lambda_dive + (object$sm$A_grid %*% x_dive)
-    }
+  if (any(names(object$rep$par.random) == "s_surf")) {
+    x_surf <- object$rep$par.random[names(object$rep$par.random) == "s_surf"]
+    lambda_surf <- lambda_surf + (object$sm$A_grid_surface %*% x_surf)
+  }
+  if (any(names(object$rep$par.random) == "s_dive")) {
+    x_dive <- object$rep$par.random[names(object$rep$par.random) == "s_dive"]
+    lambda_dive <- lambda_dive + (object$sm$A_grid_dive %*% x_dive)
   }
   lambda_dive <- exp(lambda_dive)
   lambda_surf <- exp(lambda_surf)
@@ -325,8 +323,8 @@ predict.CTMCdive <- function(object, newdata = NULL, ...) {
     exp_dive[i] <- sum(Ssurf * dt)
     exp_surf[i] <- sum(Sdive * dt)
     # get dive p-value
-    r_dive[i] <- Ssurf[floor(object$dat$dive[i] / dt)]
-    r_surf[i] <- Sdive[floor(object$dat$surface[i] / dt)]
+    r_dive[i] <- Ssurf[max(floor(object$dat$dive[i] / dt), 1)]
+    r_surf[i] <- Sdive[max(floor(object$dat$surface[i] / dt), 1)]
   }
   # return predictions
   res <- list(surface = exp_surf, dive = exp_dive, rdive = r_dive, rsurf = r_surf)

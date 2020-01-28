@@ -51,6 +51,8 @@ forms <- list(surface ~ 1,
               dive ~ s(time, bs="cs"))
 forms <- list(surface ~ s(time, bs="cs"),
               dive ~ 1)
+forms <- list(surface ~ 1,
+              dive ~ 1)
 
 # fit model
 mod <- FitCTMCdive(forms, simdat, print = TRUE)
