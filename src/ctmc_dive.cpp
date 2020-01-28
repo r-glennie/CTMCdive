@@ -18,7 +18,8 @@ Type objective_function<Type>::operator() ()
   DATA_SPARSE_MATRIX(S_surface); // smoothing matrix
   DATA_MATRIX(A_dive); // projector for dive times
   DATA_MATRIX(A_surf); // projector for surface times
-  DATA_MATRIX(A_grid); // projector for integration
+  DATA_MATRIX(A_grid_surface); // projector for integration
+  DATA_MATRIX(A_grid_dive); // projector for integration
   DATA_SPARSE_MATRIX(indD); // integration points within surfacings
   DATA_SPARSE_MATRIX(indS); // integration point within dives
   DATA_SCALAR(dt); // time step in integration
@@ -51,7 +52,7 @@ Type objective_function<Type>::operator() ()
   vector<Type> eta_surf = exp(leta_surf);
 
   // Integral of dive intensity
-  vector<Type> int_dive = A_grid * s_dive;
+  vector<Type> int_dive = A_grid_dive * s_dive;
   int_dive = exp(int_dive);
   int_dive = indD * int_dive;
   vector<Type> subint_dive = int_dive.head(int_dive.size() - 1);
@@ -60,7 +61,7 @@ Type objective_function<Type>::operator() ()
   subint_dive *= dt;
 
   // Integral of surface intensity
-  vector<Type> int_surf = A_grid * s_surf;
+  vector<Type> int_surf = A_grid_surface * s_surf;
   int_surf = exp(int_surf);
   int_surf = indS * int_surf;
   int_surf = (int_surf.array() * eta_surf.array()).matrix();

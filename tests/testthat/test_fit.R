@@ -3,8 +3,6 @@
 context("FitCTMCdive")
 
 # load data etc
-library(CTMCdive)
-
 load(system.file("simdat.RData", package="CTMCdive"))
 
 test_that("surface~s(time), dive~s(time)",{
