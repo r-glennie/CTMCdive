@@ -1,16 +1,16 @@
 # Fit a CTMC to dive data
 
-#' Compute matrices required to fit temporal smooth
+#' Compute matrices required to fit the model
 #'
 #' @param forms formulae
 #' @param dat data frame (see fitCTMCdive)
 #' @param nint number of integration points
 #'
-#' @return list of mesh, SPDE objects, point A matrices, and integral A matrices
+#' @return list of mesh, point A matrices, and integral A matrices
 #' @export
 #' @importFrom mgcv gam predict.gam
 #' @importFrom methods as
-MakeSmooth <- function(forms, dat, nint = 10000) {
+MakeMatrices <- function(forms, dat, nint = 10000) {
 
   # results list
   res <- list()
@@ -18,17 +18,15 @@ MakeSmooth <- function(forms, dat, nint = 10000) {
   ## dive model
   # GAM setup
   gam_dive <- gam(forms[["dive"]], data = dat, method = "REML")
-  res$dive_lambda <- 0
   # extract smoothing matrix
   if(length(gam_dive$smooth) > 0){
     res$S_dive <- as(gam_dive$smooth[[1]]$S[[1]], "sparseMatrix")
-    res$dive_lambda <- gam_dive$sp
   }
-  # build design matrix
-  res$A_dive <- predict(gam_dive, newdata = data.frame(time = dat$time),
-                    type = "lpmatrix")[, -1]
   # fixed effects design matrix
   res$Xs_dive <- model.matrix(gam_dive$pterms, data = dat)
+  # build design matrix for smooths
+  res$A_dive <- predict(gam_dive, newdata = dat,
+                        type = "lpmatrix")[, -c(1:ncol(res$Xs_dive))]
 
   ## surface model
   # GAM setup
@@ -37,14 +35,15 @@ MakeSmooth <- function(forms, dat, nint = 10000) {
   # extract smoothing matrix
   if(length(gam_surface$smooth) > 0){
     res$S_surface <- as(gam_surface$smooth[[1]]$S[[1]], "sparseMatrix")
-    res$surface_lambda <- gam_surface$sp
   }
-  # build design matrix
-  res$A_surf <- predict(gam_surface,
-                        newdata = data.frame(time = dat$time + dat$dive),
-                        type = "lpmatrix")[, -1]
+  surfdat <- dat
+  surfdat$time = dat$time + dat$dive
   # fixed effects design matrix
-  res$Xs_surface <- model.matrix(gam_surface$pterms, data = dat)
+  res$Xs_surface <- model.matrix(gam_surface$pterms, data = surfdat)
+  # build design matrix for smooths
+  res$A_surf <- predict(gam_surface,
+                        newdata = surfdat,
+                        type = "lpmatrix")[, -c(1:ncol(res$Xs_surface))]
 
   # construct prediction grid
   n <- nrow(dat)
@@ -54,11 +53,34 @@ MakeSmooth <- function(forms, dat, nint = 10000) {
   # spacing on prediction grid
   dt <- mean(diff(ints))
 
-  # predictor matrix
-  res$A_grid_dive <- predict(gam_dive, newdata = data.frame(time = ints),
-                        type = "lpmatrix")[, -1]
-  res$A_grid_surface <- predict(gam_surface, newdata = data.frame(time = ints),
-                        type = "lpmatrix")[, -1]
+  # construct predictor matrix
+  pred_mat_maker <- function(model, dat, ints){
+    # storage
+    newdat <- data.frame(time=ints)
+
+    # what covars do we need?
+    covs <- as.character(attr(delete.response(terms(model)),
+                              "variables"))[-1]
+    covs <- covs[covs!="time"]
+    # as.factor shennanigans
+    covs <- gsub("as.factor\\(", "", covs)
+    covs <- gsub("\\)", "", covs)
+    # for these covars, do an interpolation
+    for(cc in covs){
+      newdat[[cc]] <- approx(dat$time, dat[[cc]], ints)$y
+      if(is.factor(dat[[cc]])){
+        newdat[[cc]] <- factor(newdat[[cc]],
+                                 1:length(unique(dat[[cc]])),
+                                 levels(dat[[cc]]))
+      }
+    }
+    # build the Lp matrix!
+    predict(model, newdata = newdat, type = "lpmatrix")[, -c(1:model$nsdf)]
+  }
+
+  # do this for each part of the model
+  res$A_grid_dive <- pred_mat_maker(gam_dive, dat, ints)
+  res$A_grid_surface <- pred_mat_maker(gam_surface, surfdat, ints)
 
   # get integration matrices
   indD <- indS <- matrix(0, nrow = n, ncol = nint)
@@ -95,33 +117,32 @@ MakeSmooth <- function(forms, dat, nint = 10000) {
 #' @importFrom TMB MakeADFun sdreport
 #' @useDynLib ctmc_dive
 FitCTMCdive <- function(forms, dat, print = TRUE) {
+
   ## Make design matrices and parameter vector
   if (print) cat("Computing design matrices.......")
-  par <- NULL
 
   # name that list
   names(forms) <- c(as.character(forms[[1]][[2]]),
                     as.character(forms[[2]][[2]]))
 
-  # fixed effects starting values
-  par <- c(mean(dat$dive), mean(dat$surface))
-  par <- -log(par)
-  names(par) <- c("dive", "surface")
-
   # smoothing data
   random <- NULL
   map <- list()
-
-  sm <- MakeSmooth(forms, dat)
+  sm <- MakeMatrices(forms, dat)
 
   len <- c(ncol(sm$Xs_dive), ncol(sm$Xs_surface))
   names(len) <- c("dive", "surface")
+
+  # fixed effects starting values
+  par_dive <- -log(c(mean(dat$dive), rep(1, len[1]-1)))
+  par_surf <- -log(c(mean(dat$surface), rep(1, len[2]-1)))
+
   # all setup done now
   if(print) cat("done\n")
 
   ## Setup TMB parameter list
-  tmb_parameters <- list(par_dive = par[["dive"]],
-                         par_surf = par[["surface"]],
+  tmb_parameters <- list(par_dive = par_dive,
+                         par_surf = par_surf,
                          log_lambda_dive = 0,
                          log_lambda_surf = 0)
 
@@ -162,8 +183,10 @@ FitCTMCdive <- function(forms, dat, print = TRUE) {
                   dt = sm$dt)
 
   ## Create object
+  if (print) cat("Making AD fun.......")
   obj <- MakeADFun(tmb_dat, tmb_parameters, random = random, map = map,
                    hessian = TRUE, DLL = "ctmc_dive")
+  if(print) cat("done\n")
 
   ## Fit Model
   if (print) cat("Fitting model.......\n")
@@ -174,7 +197,7 @@ FitCTMCdive <- function(forms, dat, print = TRUE) {
   if(print) cat("Model fit in ", signif(diff[[1]], 2), attr(diff, "units"), "\n")
 
   ## Compute estimates
-  if(print) cat("Estimating variance.......")
+  if(print) cat("Estimating variance.......\n")
   npar <- sum(len)
   rep <- sdreport(obj)
   est <- rep$par.fixed
@@ -336,8 +359,7 @@ predict.CTMCdive <- function(object, newdata = NULL, ...) {
 #' Plot models fitted by \code{CTMCdive}.
 #'
 #' @param x fitted CTMCdive model object
-#' @param quant the quantile to plot the observed data up to, for example if set to 0.95 then
-#' only the durations up to the 95\% quantile are plotted (prevents outliers dominating the plot)
+#' @param quant the quantile to plot the observed data up to, for example if set to 0.95 then only the durations up to the 95\% quantile are plotted (prevents outliers dominating the plot)
 #' @param pick if not \code{NULL} then either "dive" or "surface" if only want a plot of one of the fitted
 #' processes
 #' @param pred if predicted means already computed can supply them here rather than have them recomputed
@@ -377,8 +399,7 @@ plot.CTMCdive <- function(x, quant = 1, pick = NULL, pred = NULL, xlim = NULL, .
 #' @param \dots unused (for S3 compatability)
 #'
 #' @return logLik with df attribute
-#' @note This does not account for degrees of freedom reduction with smooths (i.e
-#' if lambda > 0)
+#' @note This does not account for degrees of freedom reduction with smooths (i.e if lambda > 0)
 #' @export
 logLik.CTMCdive <- function(object, ...) {
   val <- -object$mod$value

@@ -18,6 +18,5 @@ logLik with df attribute
 Returns log-likelihood with degrees of freedom
 }
 \note{
-This does not account for degrees of freedom reduction with smooths (i.e
-if lambda > 0)
+This does not account for degrees of freedom reduction with smooths (i.e if lambda > 0)
 }

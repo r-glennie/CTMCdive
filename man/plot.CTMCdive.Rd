@@ -9,8 +9,7 @@
 \arguments{
 \item{x}{fitted CTMCdive model object}
 
-\item{quant}{the quantile to plot the observed data up to, for example if set to 0.95 then
-only the durations up to the 95\% quantile are plotted (prevents outliers dominating the plot)}
+\item{quant}{the quantile to plot the observed data up to, for example if set to 0.95 then only the durations up to the 95\% quantile are plotted (prevents outliers dominating the plot)}
 
 \item{pick}{if not \code{NULL} then either "dive" or "surface" if only want a plot of one of the fitted
 processes}
