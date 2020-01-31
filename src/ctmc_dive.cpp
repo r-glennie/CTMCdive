@@ -18,8 +18,10 @@ Type objective_function<Type>::operator() ()
   DATA_SPARSE_MATRIX(S_surface); // smoothing matrix
   DATA_MATRIX(A_dive); // projector for dive times
   DATA_MATRIX(A_surf); // projector for surface times
-  DATA_MATRIX(A_grid_surface); // projector for integration
-  DATA_MATRIX(A_grid_dive); // projector for integration
+  DATA_MATRIX(Xs_grid_surface); // projector for integration (fixed effects)
+  DATA_MATRIX(Xs_grid_dive); // projector for integration (fixed effects)
+  DATA_MATRIX(A_grid_surface); // projector for integration (random effects)
+  DATA_MATRIX(A_grid_dive); // projector for integration (random effects)
   DATA_SPARSE_MATRIX(indD); // integration points within surfacings
   DATA_SPARSE_MATRIX(indS); // integration point within dives
   DATA_SCALAR(dt); // time step in integration
@@ -52,20 +54,17 @@ Type objective_function<Type>::operator() ()
   vector<Type> eta_surf = exp(leta_surf);
 
   // Integral of dive intensity
-  vector<Type> int_dive = A_grid_dive * s_dive;
+  vector<Type> int_dive = A_grid_dive * s_dive + Xs_grid_dive * par_dive;
   int_dive = exp(int_dive);
   int_dive = indD * int_dive;
   vector<Type> subint_dive = int_dive.head(int_dive.size() - 1);
-  vector<Type> subeta_dive = eta_dive.head(eta_dive.size() - 1);
-  subint_dive = (subint_dive.array() * subeta_dive.array()).matrix();
   subint_dive *= dt;
 
   // Integral of surface intensity
-  vector<Type> int_surf = A_grid_surface * s_surf;
+  vector<Type> int_surf = A_grid_surface * s_surf + Xs_grid_surface * par_surf;
   int_surf = exp(int_surf);
   int_surf = indS * int_surf;
-  int_surf = (int_surf.array() * eta_surf.array()).matrix();
-  int_surf *= dt; 
+  int_surf *= dt;
 
   // Likelihood contributions
   for(int i = 0; i < e_dive.size(); i++) {

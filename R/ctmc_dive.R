@@ -22,11 +22,13 @@ MakeMatrices <- function(forms, dat, nint = 10000) {
   if(length(gam_dive$smooth) > 0){
     res$S_dive <- as(gam_dive$smooth[[1]]$S[[1]], "sparseMatrix")
   }
+
+  ## build design matrix
+  mm <- predict(gam_dive, newdata = dat, type = "lpmatrix")
   # fixed effects design matrix
-  res$Xs_dive <- model.matrix(gam_dive$pterms, data = dat)
-  # build design matrix for smooths
-  res$A_dive <- predict(gam_dive, newdata = dat,
-                        type = "lpmatrix")[, -c(1:ncol(res$Xs_dive))]
+  res$Xs_dive <- mm[, 1:gam_dive$nsdf, drop=FALSE]
+  # smooth design matrix
+  res$A_dive <- mm[, -c(1:gam_dive$nsdf), drop=FALSE]
 
   ## surface model
   # GAM setup
@@ -38,12 +40,13 @@ MakeMatrices <- function(forms, dat, nint = 10000) {
   }
   surfdat <- dat
   surfdat$time = dat$time + dat$dive
+
+  ## build design matrix
+  mm <- predict(gam_surface, newdata = surfdat, type = "lpmatrix")
   # fixed effects design matrix
-  res$Xs_surface <- model.matrix(gam_surface$pterms, data = surfdat)
-  # build design matrix for smooths
-  res$A_surf <- predict(gam_surface,
-                        newdata = surfdat,
-                        type = "lpmatrix")[, -c(1:ncol(res$Xs_surface))]
+  res$Xs_surface <- mm[, 1:gam_surface$nsdf, drop=FALSE]
+  # smooth design matrix
+  res$A_surf <- mm[, -c(1:gam_surface$nsdf), drop=FALSE]
 
   # construct prediction grid
   n <- nrow(dat)
@@ -67,7 +70,7 @@ MakeMatrices <- function(forms, dat, nint = 10000) {
     covs <- gsub("\\)", "", covs)
     # for these covars, do an interpolation
     for(cc in covs){
-      newdat[[cc]] <- approx(dat$time, dat[[cc]], ints)$y
+      newdat[[cc]] <- approx(dat$time, dat[[cc]], ints, method="constant")$y
       if(is.factor(dat[[cc]])){
         newdat[[cc]] <- factor(newdat[[cc]],
                                  1:length(unique(dat[[cc]])),
@@ -75,12 +78,17 @@ MakeMatrices <- function(forms, dat, nint = 10000) {
       }
     }
     # build the Lp matrix!
-    predict(model, newdata = newdat, type = "lpmatrix")[, -c(1:model$nsdf)]
+    predict(model, newdata = newdat, type = "lpmatrix")#[, -c(1:model$nsdf)]
   }
 
   # do this for each part of the model
-  res$A_grid_dive <- pred_mat_maker(gam_dive, dat, ints)
-  res$A_grid_surface <- pred_mat_maker(gam_surface, surfdat, ints)
+  pred_mat_dive <- pred_mat_maker(gam_dive, dat, ints)
+  res$Xs_grid_dive <- pred_mat_dive[, 1:gam_dive$nsdf, drop=FALSE]
+  res$A_grid_dive <- pred_mat_dive[, -c(1:gam_dive$nsdf), drop=FALSE]
+
+  pred_mat_surface <- pred_mat_maker(gam_surface, dat, ints)
+  res$Xs_grid_surface <- pred_mat_surface[, 1:gam_surface$nsdf, drop=FALSE]
+  res$A_grid_surface <- pred_mat_surface[, -c(1:gam_surface$nsdf), drop=FALSE]
 
   # get integration matrices
   indD <- indS <- matrix(0, nrow = n, ncol = nint)
@@ -134,8 +142,8 @@ FitCTMCdive <- function(forms, dat, print = TRUE) {
   names(len) <- c("dive", "surface")
 
   # fixed effects starting values
-  par_dive <- -log(c(mean(dat$dive), rep(1, len[1]-1)))
-  par_surf <- -log(c(mean(dat$surface), rep(1, len[2]-1)))
+  par_dive <- c(-log(mean(dat$dive)), rep(0, len[1]-1))
+  par_surf <- c(-log(mean(dat$surface)), rep(0, len[2]-1))
 
   # all setup done now
   if(print) cat("done\n")
@@ -178,6 +186,8 @@ FitCTMCdive <- function(forms, dat, print = TRUE) {
                   A_surf = sm$A_surf,
                   A_grid_surface = sm$A_grid_surface,
                   A_grid_dive = sm$A_grid_dive,
+                  Xs_grid_surface = sm$Xs_grid_surface,
+                  Xs_grid_dive = sm$Xs_grid_dive,
                   indD = sm$indD,
                   indS = sm$indS,
                   dt = sm$dt)
