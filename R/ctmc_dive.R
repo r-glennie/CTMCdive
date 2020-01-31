@@ -185,7 +185,7 @@ FitCTMCdive <- function(forms, dat, print = TRUE) {
   ## Create object
   if (print) cat("Making AD fun.......")
   obj <- MakeADFun(tmb_dat, tmb_parameters, random = random, map = map,
-                   hessian = TRUE, DLL = "ctmc_dive")
+                   hessian = TRUE, DLL = "ctmc_dive", silent=!print)
   if(print) cat("done\n")
 
   ## Fit Model
