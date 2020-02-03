@@ -33,7 +33,6 @@ MakeMatrices <- function(forms, dat, nint = 10000) {
   ## surface model
   # GAM setup
   gam_surface <- gam(forms[["surface"]], data = dat, method = "REML")
-  res$surface_lambda <- 0
   # extract smoothing matrix
   if(length(gam_surface$smooth) > 0){
     res$S_surface <- as(gam_surface$smooth[[1]]$S[[1]], "sparseMatrix")
@@ -418,3 +417,41 @@ logLik.CTMCdive <- function(object, ...) {
   attributes(llk)$df <- npar
   return(llk)
 }
+
+#' Akaike's An Information Criterion for CTMCdive models
+#'
+#' Calculate the AIC from a fitted model.
+#'
+#' @param object a fitted detection function object
+#' @param k penalty per parameter to be used; the default \code{k = 2} is the "classical" AIC
+#' @param \dots optionally more fitted model objects.
+#' @author David L Miller
+#' @export
+#' @importFrom stats logLik
+AIC.CTMCdive <- function(object, ..., k=2){
+
+  # get the models
+  models <- list(object, ...)
+
+  # build the table
+  aics <- matrix(NA, nrow=length(models), ncol=2)
+  for(i in seq_along(models)){
+    ll <- logLik(models[[i]])
+
+    
+
+    aics[i, 1] <- 
+    aics[i, 2] <- -2*ll + k*aics[i, 1]
+  }
+  # make it a data.frame
+  aics <- as.data.frame(aics)
+  names(aics) <- c("df", "AIC")
+  # add row names
+  call <- match.call(expand.dots=TRUE)
+  rownames(aics) <- as.character(call)[-1]
+
+  return(aics)
+
+}
+
+
