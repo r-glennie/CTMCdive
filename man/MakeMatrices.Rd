@@ -14,7 +14,7 @@ MakeMatrices(forms, dat, nint = 10000)
 \item{nint}{number of integration points}
 }
 \value{
-list of mesh, point A matrices, and integral A matrices
+list of matrices required to fit the model
 }
 \description{
 Compute matrices required to fit the model

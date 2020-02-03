@@ -6,10 +6,11 @@
 #' @param dat data frame (see fitCTMCdive)
 #' @param nint number of integration points
 #'
-#' @return list of mesh, point A matrices, and integral A matrices
+#' @return list of matrices required to fit the model
 #' @export
 #' @importFrom mgcv gam predict.gam
 #' @importFrom methods as
+#' @importFrom Matrix bdiag
 MakeMatrices <- function(forms, dat, nint = 10000) {
 
   # results list
@@ -18,9 +19,18 @@ MakeMatrices <- function(forms, dat, nint = 10000) {
   ## dive model
   # GAM setup
   gam_dive <- gam(forms[["dive"]], data = dat, method = "REML")
-  # extract smoothing matrix
+  # accumulate smoothing matrix, block diagonal
   if(length(gam_dive$smooth) > 0){
-    res$S_dive <- as(gam_dive$smooth[[1]]$S[[1]], "sparseMatrix")
+    S_dive_list <- list()
+    for(i in seq_along(gam_dive$smooth)){
+      smoo <- gam_dive$smooth[[i]]
+      for(j in seq_along(smoo$S)){
+        S_dive_list <- c(S_dive_list, as(smoo$S[[j]], "sparseMatrix"))
+        res$S_dive_n <- c(res$S_dive_n, nrow(smoo$S[[j]]))
+      }
+    }
+    # build a block diagonal matrix
+    res$S_dive <- bdiag(S_dive_list)
   }
 
   ## build design matrix
@@ -33,9 +43,18 @@ MakeMatrices <- function(forms, dat, nint = 10000) {
   ## surface model
   # GAM setup
   gam_surface <- gam(forms[["surface"]], data = dat, method = "REML")
-  # extract smoothing matrix
+  # accumulate smoothing matrix, block diagonal
   if(length(gam_surface$smooth) > 0){
-    res$S_surface <- as(gam_surface$smooth[[1]]$S[[1]], "sparseMatrix")
+    S_surface_list <- list()
+    for(i in seq_along(gam_surface$smooth)){
+      smoo <- gam_surface$smooth[[i]]
+      for(j in seq_along(smoo$S)){
+        S_surface_list <- c(S_surface_list, as(smoo$S[[j]], "sparseMatrix"))
+        res$S_surface_n <- c(res$S_surface_n, nrow(smoo$S[[j]]))
+      }
+    }
+    # build a block diagonal matrix
+    res$S_surface <- bdiag(S_surface_list)
   }
   surfdat <- dat
   surfdat$time = dat$time + dat$dive
@@ -69,11 +88,13 @@ MakeMatrices <- function(forms, dat, nint = 10000) {
     covs <- gsub("\\)", "", covs)
     # for these covars, do an interpolation
     for(cc in covs){
-      newdat[[cc]] <- approx(dat$time, dat[[cc]], ints, method="constant")$y
       if(is.factor(dat[[cc]])){
+        newdat[[cc]] <- approx(dat$time, dat[[cc]], ints, method="constant")$y
         newdat[[cc]] <- factor(newdat[[cc]],
                                  1:length(unique(dat[[cc]])),
                                  levels(dat[[cc]]))
+      }else{
+        newdat[[cc]] <- approx(dat$time, dat[[cc]], ints, method="linear")$y
       }
     }
     # build the Lp matrix!
@@ -180,7 +201,9 @@ FitCTMCdive <- function(forms, dat, print = TRUE) {
   tmb_dat <- list(Xdive = sm$Xs_dive,
                   Xsurf = sm$Xs_surface,
                   S_dive = sm$S_dive,
+                  S_dive_n = as.integer(sm$S_dive_n),
                   S_surface = sm$S_surface,
+                  S_surface_n = as.integer(sm$S_surface_n),
                   A_dive = sm$A_dive,
                   A_surf = sm$A_surf,
                   A_grid_surface = sm$A_grid_surface,
@@ -413,40 +436,47 @@ logLik.CTMCdive <- function(object, ...) {
   return(llk)
 }
 
-#' Akaike's An Information Criterion for CTMCdive models
-#'
-#' Calculate the AIC from a fitted model.
-#'
-#' @param object a fitted detection function object
-#' @param k penalty per parameter to be used; the default \code{k = 2} is the "classical" AIC
-#' @param \dots optionally more fitted model objects.
-#' @author David L Miller
-#' @export
-#' @importFrom stats logLik
-AIC.CTMCdive <- function(object, ..., k=2){
-
-  # get the models
-  models <- list(object, ...)
-
-  # build the table
-  aics <- matrix(NA, nrow=length(models), ncol=2)
-  for(i in seq_along(models)){
-    ll <- logLik(models[[i]])
-
-    
-
-    aics[i, 1] <- 
-    aics[i, 2] <- -2*ll + k*aics[i, 1]
-  }
-  # make it a data.frame
-  aics <- as.data.frame(aics)
-  names(aics) <- c("df", "AIC")
-  # add row names
-  call <- match.call(expand.dots=TRUE)
-  rownames(aics) <- as.character(call)[-1]
-
-  return(aics)
-
-}
+##' Akaike's An Information Criterion for CTMCdive models
+##'
+##' Calculate the AIC from a fitted model.
+##'
+##' @param object a fitted detection function object
+##' @param k penalty per parameter to be used; the default \code{k = 2} is the "classical" AIC
+##' @param \dots optionally more fitted model objects.
+##' @author David L Miller
+##' @export
+##' @importFrom stats logLik
+#AIC.CTMCdive <- function(object, ..., k=2){
+#
+#  # get the models
+#  models <- list(object, ...)
+#
+#  # build the table
+#  aics <- matrix(NA, nrow=length(models), ncol=2)
+#  for(i in seq_along(models)){
+#    this_mod <- models[[i]]
+#    ll <- logLik(this_mod)
+#
+#    # F = (Xt X + sp*S)^-1 Xt X
+#
+#    # get smoopars
+#    pars <- this_mod$mod$par
+#    sp_dive <- pars[grepl("^log_lambda_dive", names(pars))]
+#    sp_surf <- pars[grepl("^log_lambda_surf", names(pars))]
+#
+#
+#    aics[i, 1] <- 
+#    aics[i, 2] <- -2*ll + k*aics[i, 1]
+#  }
+#  # make it a data.frame
+#  aics <- as.data.frame(aics)
+#  names(aics) <- c("df", "AIC")
+#  # add row names
+#  call <- match.call(expand.dots=TRUE)
+#  rownames(aics) <- as.character(call)[-1]
+#
+#  return(aics)
+#
+#}
 
 

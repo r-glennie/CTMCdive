@@ -25,23 +25,49 @@ Type objective_function<Type>::operator() ()
   DATA_SPARSE_MATRIX(indD); // integration points within surfacings
   DATA_SPARSE_MATRIX(indS); // integration point within dives
   DATA_SCALAR(dt); // time step in integration
+  DATA_IVECTOR(S_dive_n); // sizes of sparse matrices
+  DATA_IVECTOR(S_surface_n); // sizes of sparse matrices
 
   PARAMETER_VECTOR(par_dive); // dive parameters
   PARAMETER_VECTOR(par_surf); // surface parameters
-  PARAMETER(log_lambda_dive); // dive log smoothing parameter
-  PARAMETER(log_lambda_surf); // surface log smoothing parameter
+  PARAMETER_VECTOR(log_lambda_dive); // dive log smoothing parameter
+  PARAMETER_VECTOR(log_lambda_surf); // surface log smoothing parameter
   PARAMETER_VECTOR(s_dive); // dive random effects
   PARAMETER_VECTOR(s_surf); // surface random effects
 
-  Type lambda_dive = exp(log_lambda_dive); // dive smoothing parameter
-  Type lambda_surf = exp(log_lambda_surf); // surface smoothing parameter
+  vector<Type> lambda_dive = exp(log_lambda_dive); // dive smoothing parameter
+  vector<Type> lambda_surf = exp(log_lambda_surf); // surface smoothing parameter
 
   // Negative log-likelihood is nll
   Type nll = 0;
 
-  // add smoothing penalties
-  nll -= Type(0.5) * S_dive.cols() * log_lambda_dive - 0.5 * lambda_dive * GMRF(S_dive).Quadform(s_dive);
-  nll -= Type(0.5) * S_surface.cols() * log_lambda_surf - 0.5 * lambda_surf * GMRF(S_surface).Quadform(s_surf);
+  // add smoothing penalties, need to do this wonky bit to unblock S in each case
+  // data setup
+  int Sn = 0;
+  int S_start = 0;
+  vector<Type> this_beta = s_dive;
+  vector<Type> this_s;
+  SparseMatrix<Type> this_S;
+
+  // dive bit
+  for(int i = 0; i < S_dive_n.size(); i++) {
+    Sn = S_dive_n(i);
+    this_S = S_dive.block(S_start, S_start, Sn, Sn);
+    this_s = s_dive.segment(S_start, Sn);
+    nll -= Type(0.5) * Type(Sn) * log_lambda_dive(i) - 0.5 * lambda_dive(i) * GMRF(this_S).Quadform(this_s);
+    S_start += Sn;
+  }
+
+  // surface bit
+  Sn = 0;
+  S_start = 0;
+  for(int i = 0; i < S_surface_n.size(); i++) {
+    Sn = S_surface_n(i);
+    this_S = S_surface.block(S_start, S_start, Sn, Sn);
+    this_s = s_surf.segment(S_start, Sn);
+    nll -= Type(0.5) * Type(Sn) * log_lambda_surf(i) - 0.5 * lambda_surf(i) * GMRF(this_S).Quadform(this_s);
+    S_start += Sn;
+  }
 
   // Linear predictors with and without random effect
   vector<Type> leta_dive = Xdive * par_dive;
