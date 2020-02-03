@@ -275,18 +275,13 @@ summary.CTMCdive <- function(object, ...) {
   cat("Continuous-time Markov Chain Diving Model\n")
   cat("Number of Dives: ", nrow(object$dat), "\n")
   cat("\n")
-  cat("Model fit:\n")
+  cat("Model formulae:\n")
+  cat("  ")
   print(object$forms[[1]])
+  cat("  ")
   print(object$forms[[2]])
-  # TODO: rewrite this!!!
-  #if (object$model != "iid") {
-  #  cat("with cubic shrinkage smooth for ")
-  #  if (object$lambda[1] > 1e-10) cat("dive intensity")
-  #  if (object$lambda[1] > 1e-10 & object$lambda[2] > 1e-10) cat(" and ")
-  #  if (object$lambda[2] > 1e-10) cat("surfacing intensity")
-  #  cat(".")
-  #}
   cat("\n")
+
   cat(rep("-", 30), "\n")
   cat("DIVE INTENSITY\n")
   print(signif(object$res$dive, 4))
