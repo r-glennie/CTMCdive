@@ -436,47 +436,68 @@ logLik.CTMCdive <- function(object, ...) {
   return(llk)
 }
 
-##' Akaike's An Information Criterion for CTMCdive models
-##'
-##' Calculate the AIC from a fitted model.
-##'
-##' @param object a fitted detection function object
-##' @param k penalty per parameter to be used; the default \code{k = 2} is the "classical" AIC
-##' @param \dots optionally more fitted model objects.
-##' @author David L Miller
-##' @export
-##' @importFrom stats logLik
-#AIC.CTMCdive <- function(object, ..., k=2){
-#
-#  # get the models
-#  models <- list(object, ...)
-#
-#  # build the table
-#  aics <- matrix(NA, nrow=length(models), ncol=2)
-#  for(i in seq_along(models)){
-#    this_mod <- models[[i]]
-#    ll <- logLik(this_mod)
-#
-#    # F = (Xt X + sp*S)^-1 Xt X
-#
-#    # get smoopars
-#    pars <- this_mod$mod$par
-#    sp_dive <- pars[grepl("^log_lambda_dive", names(pars))]
-#    sp_surf <- pars[grepl("^log_lambda_surf", names(pars))]
-#
-#
-#    aics[i, 1] <- 
-#    aics[i, 2] <- -2*ll + k*aics[i, 1]
-#  }
-#  # make it a data.frame
-#  aics <- as.data.frame(aics)
-#  names(aics) <- c("df", "AIC")
-#  # add row names
-#  call <- match.call(expand.dots=TRUE)
-#  rownames(aics) <- as.character(call)[-1]
-#
-#  return(aics)
-#
-#}
+#' Akaike's An Information Criterion for CTMCdive models
+#'
+#' Calculate the AIC from a fitted model.
+#'
+#' @param object a fitted detection function object
+#' @param k penalty per parameter to be used; the default \code{k = 2} is the "classical" AIC
+#' @param \dots optionally more fitted model objects.
+#' @author David L Miller
+#' @export
+#' @importFrom stats logLik
+AIC.CTMCdive <- function(object, ..., k=2){
+
+  # get the models
+  models <- list(object, ...)
+
+  # EDF for smooth terms = trace(F)
+  # F = (Xt X + sp*S)^-1 Xt X
+  # Wood 2017 p 212
+  EDF_f <- function(X, S, lambda, Sn){
+    # duplicate lambda enough times
+    lambda <- rep(lambda, Sn)
+    # calculate lambda*S
+    Sbig <- S * lambda
+
+    # calculate the hat matrix
+    XtX <- t(X) %*% X
+    Fi <- solve(XtX + Sbig)
+    F <- Fi %*% XtX
+
+    # return the trace
+    sum(diag(F))
+  }
+
+  # build the table
+  aics <- matrix(NA, nrow=length(models), ncol=2)
+  for(i in seq_along(models)){
+    this_mod <- models[[i]]
+    ll <- logLik(this_mod)
+
+    # dive component
+    dive_lambda <- exp(object$rep$par.fixed[grepl("^log_lambda_dive", names(object$rep$par.fixed))])
+    dive_edf <- EDF_f(object$sm$A_dive, object$sm$S_dive, dive_lambda, object$sm$S_dive_n)
+    # surface component
+    surface_lambda <- exp(object$rep$par.fixed[grepl("^log_lambda_surf", names(object$rep$par.fixed))])
+    surface_edf <- EDF_f(object$sm$A_surf, object$sm$S_surface, surface_lambda, object$sm$S_surface_n)
+    # DF for fixed effects
+    fixed_edf <- length(object$rep$par.fixed) - (length(dive_lambda) + length(surface_lambda))
+    # total
+    total_edf <- dive_edf + surface_edf + fixed_edf
+
+    aics[i, 1] <- total_edf
+    aics[i, 2] <- -2*ll + k*aics[i, 1]
+  }
+  # make it a data.frame
+  aics <- as.data.frame(aics)
+  names(aics) <- c("df", "AIC")
+  # add row names
+  call <- match.call(expand.dots=TRUE)
+  rownames(aics) <- as.character(call)[-1]
+
+  return(aics)
+
+}
 
 
