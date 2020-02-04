@@ -171,8 +171,8 @@ FitCTMCdive <- function(forms, dat, print = TRUE) {
   ## Setup TMB parameter list
   tmb_parameters <- list(par_dive = par_dive,
                          par_surf = par_surf,
-                         log_lambda_dive = 0,
-                         log_lambda_surf = 0)
+                         log_lambda_dive = rep(0, length(sm$S_dive_n)),
+                         log_lambda_surf = rep(0, length(sm$S_surface_n)))
 
   # if there are smooths of dive or surface, set up the TMB
   # model objects correctly
