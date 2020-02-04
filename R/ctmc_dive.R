@@ -89,12 +89,12 @@ MakeMatrices <- function(forms, dat, nint = 10000) {
     # for these covars, do an interpolation
     for(cc in covs){
       if(is.factor(dat[[cc]])){
-        newdat[[cc]] <- approx(dat$time, dat[[cc]], ints, method="constant")$y
+        newdat[[cc]] <- approx(dat$time, dat[[cc]], ints, method="constant", rule=2)$y
         newdat[[cc]] <- factor(newdat[[cc]],
                                  1:length(unique(dat[[cc]])),
                                  levels(dat[[cc]]))
       }else{
-        newdat[[cc]] <- approx(dat$time, dat[[cc]], ints, method="linear")$y
+        newdat[[cc]] <- approx(dat$time, dat[[cc]], ints, method="linear", rule=2)$y
       }
     }
     # build the Lp matrix!
