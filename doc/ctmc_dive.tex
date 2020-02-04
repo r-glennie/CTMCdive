@@ -56,6 +56,14 @@ The marginal likelihood is then $\mathcal{L}_m(\bm\theta) = \int \mathcal{L}(\bm
 
 The model is implemented in R \citep{R} using the Template Model Builder package \citep{TMB} to perform the Laplace approximation. The survival functions are approximated by Riemann sums. 
  
+ \subsection{AIC calculation}
+ 
+For the smooth components in the model, the effective degrees of freedom were calculated to use for AIC calculation. Following from \citep[][Section 5.4.2]{wood2017generalized} we write the effective degrees of freedom as:
+\begin{equation}
+\text{trace}\left(\mathbf{F}\right) = \text{trace}\left((\mathbf{X}^\intercal \mathbf{X} + \lambda \mathbf{S})^{-1} \mathbf{X}^\intercal \mathbf{X}\right),
+\end{equation}
+where $\mathbf{F}$ is the influence matrix for the smooth. We need to calculate $\mathbf{F}$ for each part of the model (dive and surface), then add-in the degrees of freedom from fixed effects to get a total degrees of freedom for the model. This can then be used in the usual AIC formula.
+% Reference the fancy version from Wood 2016/2017 and Kass and Steffey
 
 \bibliographystyle{chicago}
 \bibliography{ctmc_refs.bib}
