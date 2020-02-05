@@ -476,13 +476,13 @@ AIC.CTMCdive <- function(object, ..., k=2){
     ll <- logLik(this_mod)
 
     # dive component
-    dive_lambda <- exp(object$rep$par.fixed[grepl("^log_lambda_dive", names(object$rep$par.fixed))])
-    dive_edf <- EDF_f(object$sm$A_dive, object$sm$S_dive, dive_lambda, object$sm$S_dive_n)
+    dive_lambda <- exp(this_mod$rep$par.fixed[grepl("^log_lambda_dive", names(this_mod$rep$par.fixed))])
+    dive_edf <- EDF_f(this_mod$sm$A_dive, this_mod$sm$S_dive, dive_lambda, this_mod$sm$S_dive_n)
     # surface component
-    surface_lambda <- exp(object$rep$par.fixed[grepl("^log_lambda_surf", names(object$rep$par.fixed))])
-    surface_edf <- EDF_f(object$sm$A_surf, object$sm$S_surface, surface_lambda, object$sm$S_surface_n)
+    surface_lambda <- exp(this_mod$rep$par.fixed[grepl("^log_lambda_surf", names(this_mod$rep$par.fixed))])
+    surface_edf <- EDF_f(this_mod$sm$A_surf, this_mod$sm$S_surface, surface_lambda, this_mod$sm$S_surface_n)
     # DF for fixed effects
-    fixed_edf <- length(object$rep$par.fixed) - (length(dive_lambda) + length(surface_lambda))
+    fixed_edf <- length(this_mod$rep$par.fixed) - (length(dive_lambda) + length(surface_lambda))
     # total
     total_edf <- dive_edf + surface_edf + fixed_edf
 
