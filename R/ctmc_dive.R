@@ -332,6 +332,10 @@ predict.CTMCdive <- function(object, newdata = NULL, ...) {
   par_dive <- par[1:len[1]]
   par_surf <- par[(len[1] + 1):(len[1] + len[2])]
 
+  if(!is.null(newdata)){
+    stop("New data not supported yet!")
+  }
+
   # linear predictors
   nu_dive <- object$Xs_dive %*% par_dive
   nu_surf <- object$Xs_surface %*% par_surf
