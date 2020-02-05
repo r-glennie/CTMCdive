@@ -4,7 +4,18 @@
 \alias{plot.CTMCdive}
 \title{Plot fitted CTMCdive model}
 \usage{
-\method{plot}{CTMCdive}(x, quant = 1, pick = NULL, pred = NULL, xlim = NULL, ...)
+\method{plot}{CTMCdive}(
+  x,
+  quant = 1,
+  pick = NULL,
+  pred = NULL,
+  xlim = NULL,
+  se = FALSE,
+  n_samp = 200,
+  pch = 19,
+  cex = 0.6,
+  ...
+)
 }
 \arguments{
 \item{x}{fitted CTMCdive model object}
@@ -17,6 +28,10 @@ processes}
 \item{pred}{if predicted means already computed can supply them here rather than have them recomputed}
 
 \item{xlim}{limits for x axis if you want to restrict range}
+
+\item{se}{display uncertainty bands around the lines (takes time to compute)}
+
+\item{n_samp}{number of posterior samples to use if \code{se=TRUE}, otherwise ignored}
 
 \item{\dots}{unused (for S3 compatability)}
 }

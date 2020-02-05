@@ -231,7 +231,9 @@ FitCTMCdive <- function(forms, dat, print = TRUE) {
   ## Compute estimates
   if(print) cat("Estimating variance.......\n")
   npar <- sum(len)
-  rep <- sdreport(obj)
+  # want to return the full vcov (well, precision)
+  rep <- sdreport(obj, getJointPrecision=TRUE)
+
   est <- rep$par.fixed
   var <- rep$cov.fixed
   sds <- sqrt(diag(var))
@@ -352,7 +354,6 @@ predict.CTMCdive <- function(object, newdata = NULL, ...) {
   lambda_dive[ints > object$dat$time[nrow(object$dat)]] <- nu_dive[length(nu_dive)]
   lambda_surf[ints > object$dat$time[nrow(object$dat)]] <- nu_surf[length(nu_surf)]
 
-  # TODO: this needs to be fixed!!
   if (any(names(object$rep$par.random) == "s_surf")) {
     x_surf <- object$rep$par.random[names(object$rep$par.random) == "s_surf"]
     lambda_surf <- lambda_surf + (object$sm$A_grid_surface %*% x_surf)
@@ -395,12 +396,14 @@ predict.CTMCdive <- function(object, newdata = NULL, ...) {
 #' processes
 #' @param pred if predicted means already computed can supply them here rather than have them recomputed
 #' @param xlim limits for x axis if you want to restrict range
+#' @param se display uncertainty bands around the lines (takes time to compute)
+#' @param n_samp number of posterior samples to use if \code{se=TRUE}, otherwise ignored
 #' @param \dots unused (for S3 compatability)
 #'
 #' @return plots of dive and surface durations or only one of if "\code{pick}" is specified
 #' @export
 #' @importFrom graphics lines par plot
-plot.CTMCdive <- function(x, quant = 1, pick = NULL, pred = NULL, xlim = NULL, ...) {
+plot.CTMCdive <- function(x, quant = 1, pick = NULL, pred = NULL, xlim = NULL, se=FALSE, n_samp=200, pch=19, cex=0.6, ...) {
   if (is.null(pick)) {
     par(mfrow=c(2, 1))
     on.exit(par(mfrow=c(1,1)))
@@ -408,20 +411,69 @@ plot.CTMCdive <- function(x, quant = 1, pick = NULL, pred = NULL, xlim = NULL, .
   }
   # get predicted values
   if (is.null(pred)) pred <- predict(x)
-  # get maximum time if scaled
   time <- x$dat$time
+
+  if(se){
+    # get uncertainty
+    ss <- get_samples(mod, n_samp)
+    # function to apply
+    afn <- function(pars, m){
+      m$rep$par.fixed <- pars[1:length(m$rep$par.fixed)]
+      m$rep$par.random <- pars[-(1:length(m$rep$par.fixed))]
+      pp <- predict(m)
+      return(c(pp$surface, pp$dive))
+    }
+    samples <- apply(ss, 1, afn, m=mod)
+    surface_samples <- samples[1:length(time), ]
+    dive_samples <- samples[-(1:length(time)), ]
+  }
+
   # plot fitted values over observed
   if (pick == "all" | pick == "surface") {
     q <- quantile(x$dat$surface, prob = quant)
-    plot(time, x$dat$surface, col = "grey60", xlab = "Time", ylab = "Surface duration",  ylim = c(min(x$dat$surface), q), xlim = xlim)
-    lines(time, pred$surface, col = "red")
+    plot(time, x$dat$surface, xlab = "Time", ylab = "Surface duration",  ylim = c(min(x$dat$surface), q), xlim = xlim, type="n", ...)
+    if(se){
+      surface_upper <- apply(surface_samples, 1, quantile, probs=0.975)
+      surface_lower <- apply(surface_samples, 1, quantile, probs=0.025)
+      polygon(c(time, rev(time)), c(surface_upper, surface_lower), col="grey80", border=NA)
+    }
+    points(time, x$dat$surface, col = "grey60", pch=pch, cex=cex)
+    lines(time, pred$surface)
   }
   if (pick == "all" | pick == "dive") {
     q <- quantile(x$dat$dive, prob = quant)
-    plot(time, x$dat$dive, col = "grey60", xlab = "Time", ylab = "Dive duration",  ylim = c(min(x$dat$dive), q), xlim = xlim)
-    lines(time, pred$dive, col = "blue")
+    plot(time, x$dat$dive, xlab = "Time", ylab = "Dive duration",  ylim = c(min(x$dat$dive), q), xlim = xlim, type="n", ...)
+    if(se){
+      dive_upper <- apply(dive_samples, 1, quantile, probs=0.975)
+      dive_lower <- apply(dive_samples, 1, quantile, probs=0.025)
+      polygon(c(time, rev(time)), c(dive_upper, dive_lower), col="grey80", border=NA)
+    }
+    points(time, x$dat$dive, col = "grey60", pch=pch, cex=cex)
+    lines(time, pred$dive)
   }
   invisible(list(mod = x, pred = pred))
+}
+
+#' internal function to get posterior samples
+#'
+#' @param mod a fitted model object
+#' @param n number of samples to take
+#' @importFrom mgcv rmvn
+get_samples <- function(mod, n=200){
+
+  # extract the joint precision
+  prec <- mod$rep$jointPrecision
+  # remove smoopars
+  prec <- prec[!grepl("log_lambda_", colnames(prec)),
+               !grepl("log_lambda_", colnames(prec)), drop=FALSE]
+  # solve to get variance-covariance matrix
+  vc <- solve(prec)
+
+  # get pars
+  pars <- c(mod$rep$par.fixed, mod$rep$par.random)
+  pars <- pars[!grepl("log_lambda_", names(pars))]
+
+  rmvn(n, pars, vc)
 }
 
 #' Returns log-likelihood with degrees of freedom
