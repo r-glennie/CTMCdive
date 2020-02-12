@@ -3,6 +3,7 @@
 // Continuous-time Markov chain with SPDE 
 
 #include <TMB.hpp>
+#include <iostream>
 
 template<class Type>
 Type objective_function<Type>::operator() ()
@@ -12,6 +13,7 @@ Type objective_function<Type>::operator() ()
   using namespace density;
   using namespace Eigen;
 
+  DATA_INTEGER(flag); // flag=0 => only prior
   DATA_MATRIX(Xdive); // dive design matrix
   DATA_MATRIX(Xsurf); // surface design matrix
   DATA_SPARSE_MATRIX(S_dive); // smoothing matrix
@@ -38,64 +40,59 @@ Type objective_function<Type>::operator() ()
   vector<Type> lambda_dive = exp(log_lambda_dive); // dive smoothing parameter
   vector<Type> lambda_surf = exp(log_lambda_surf); // surface smoothing parameter
 
-  // Negative log-likelihood is nll
+  // Negative log-likelihood
   Type nll = 0;
 
   // add smoothing penalties, need to do this wonky bit to unblock S in each case
   // data setup
-  int Sn = 0;
   int S_start = 0;
-  vector<Type> this_beta = s_dive;
-  vector<Type> this_s;
-  SparseMatrix<Type> this_S;
 
   // dive bit
   for(int i = 0; i < S_dive_n.size(); i++) {
-    Sn = S_dive_n(i);
-    this_S = S_dive.block(S_start, S_start, Sn, Sn);
-    this_s = s_dive.segment(S_start, Sn);
-    nll -= Type(0.5) * Type(Sn) * log_lambda_dive(i) - 0.5 * lambda_dive(i) * GMRF(this_S).Quadform(this_s);
+    int Sn = S_dive_n(i);
+    SparseMatrix<Type> this_S = S_dive.block(S_start, S_start, Sn, Sn);
+    vector<Type> beta_s = s_dive.segment(S_start, Sn);
+    nll -= Type(0.5) * Sn * log_lambda_dive(i) - 0.5 * lambda_dive(i) * GMRF(this_S, false).Quadform(beta_s);
     S_start += Sn;
   }
 
   // surface bit
-  Sn = 0;
   S_start = 0;
   for(int i = 0; i < S_surface_n.size(); i++) {
-    Sn = S_surface_n(i);
-    this_S = S_surface.block(S_start, S_start, Sn, Sn);
-    this_s = s_surf.segment(S_start, Sn);
-    nll -= Type(0.5) * Type(Sn) * log_lambda_surf(i) - 0.5 * lambda_surf(i) * GMRF(this_S).Quadform(this_s);
+    int Sn = S_surface_n(i);
+    SparseMatrix<Type> this_S = S_surface.block(S_start, S_start, Sn, Sn);
+    vector<Type> beta_s = s_surf.segment(S_start, Sn);
+    nll -= Type(0.5) * Sn * log_lambda_surf(i) - 0.5 * lambda_surf(i) * GMRF(this_S, false).Quadform(beta_s);
     S_start += Sn;
   }
 
-  // Linear predictors with and without random effect
-  vector<Type> leta_dive = Xdive * par_dive;
-  vector<Type> le_dive = leta_dive + A_dive * s_dive;
-  vector<Type> leta_surf = Xsurf * par_surf;
-  vector<Type> le_surf  = leta_surf + A_surf * s_surf;
-  vector<Type> e_dive = exp(le_dive);
-  vector<Type> e_surf = exp(le_surf);
-  vector<Type> eta_dive = exp(leta_dive);
-  vector<Type> eta_surf = exp(leta_surf);
+
+  // Return un-normalized density on request
+  // used when running TMB::normalize to obtain GMRF normalization
+  if (flag == 0) return nll;
+
+  // calculate log intensities
+  vector<Type> le_dive = Xdive * par_dive + A_dive * s_dive;
+  vector<Type> le_surf  = Xsurf * par_surf + A_surf * s_surf;
 
   // Integral of dive intensity
-  vector<Type> int_dive = A_grid_dive * s_dive + Xs_grid_dive * par_dive;
+  vector<Type> int_dive = Xs_grid_dive * par_dive + A_grid_dive * s_dive;
   int_dive = exp(int_dive);
   int_dive = indD * int_dive;
+  // integral is t_i-u_{i-1}, t_n
   vector<Type> subint_dive = int_dive.head(int_dive.size() - 1);
   subint_dive *= dt;
 
   // Integral of surface intensity
-  vector<Type> int_surf = A_grid_surface * s_surf + Xs_grid_surface * par_surf;
+  vector<Type> int_surf = Xs_grid_surface * par_surf + A_grid_surface * s_surf;
   int_surf = exp(int_surf);
   int_surf = indS * int_surf;
   int_surf *= dt;
 
   // Likelihood contributions
-  for(int i = 0; i < e_dive.size(); i++) {
+  for(int i = 0; i < le_dive.size(); i++) {
     nll -= le_dive(i) + le_surf(i) - int_surf(i);
-    if (i < e_dive.size() - 1) nll -= -subint_dive(i);
+    if (i < le_dive.size() - 1) nll -= -subint_dive(i);
   }
 
   return nll;

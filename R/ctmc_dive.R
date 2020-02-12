@@ -57,7 +57,7 @@ MakeMatrices <- function(forms, dat, nint = 10000) {
     res$S_surface <- bdiag(S_surface_list)
   }
   surfdat <- dat
-  surfdat$time = dat$time + dat$dive
+  surfdat$time <- dat$time + dat$dive
 
   ## build design matrix
   mm <- predict(gam_surface, newdata = surfdat, type = "lpmatrix")
@@ -98,7 +98,7 @@ MakeMatrices <- function(forms, dat, nint = 10000) {
       }
     }
     # build the Lp matrix!
-    predict(model, newdata = newdat, type = "lpmatrix")#[, -c(1:model$nsdf)]
+    predict(model, newdata = newdat, type = "lpmatrix")
   }
 
   # do this for each part of the model
@@ -212,6 +212,7 @@ FitCTMCdive <- function(forms, dat, print = TRUE) {
                   Xs_grid_dive = sm$Xs_grid_dive,
                   indD = sm$indD,
                   indS = sm$indS,
+                  flag = 1L,
                   dt = sm$dt)
 
   ## Create object
@@ -222,8 +223,10 @@ FitCTMCdive <- function(forms, dat, print = TRUE) {
 
   ## Fit Model
   if (print) cat("Fitting model.......\n")
+obj <- normalize(obj, flag="flag")
   t0 <- Sys.time()
-  mod <- do.call(optim, obj)
+#  mod <- do.call(optim, obj)
+mod <- optim(obj$par, obj$fn, obj$gr, method="BFGS")
   t1 <- Sys.time()
   diff <- difftime(t1, t0)
   if(print) cat("Model fit in ", signif(diff[[1]], 2), attr(diff, "units"), "\n")

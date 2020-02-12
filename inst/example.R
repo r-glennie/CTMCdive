@@ -1,8 +1,10 @@
 # Simulate data
-library(CTMCdive)
+#library(CTMCdive)
+devtools::load_all()
 library(expm)
 
 ## hacky simulation code
+set.seed(1)
 T <- 1000
 dt <- 0.01
 t <- seq(0, T, by = dt)
@@ -47,15 +49,15 @@ for (i in 2:n) {
 # setup model
 forms <- list(surface ~ s(time, bs="cs"),
               dive ~ s(time, bs="cs"))
-forms <- list(surface ~ 1,
-              dive ~ s(time, bs="cs"))
-forms <- list(surface ~ s(time, bs="cs"),
-              dive ~ 1)
-forms <- list(surface ~ 1,
-              dive ~ 1)
+#forms <- list(surface ~ 1,
+#              dive ~ s(time, bs="cs"))
+#forms <- list(surface ~ s(time, bs="cs"),
+#              dive ~ 1)
+#forms <- list(surface ~ 1,
+#              dive ~ 1)
 
 # fit model
-mod <- FitCTMCdive(forms, simdat, print = TRUE)
+mod <- FitCTMCdive(forms, dat, print = TRUE)
 
 mod
 
