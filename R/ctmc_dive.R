@@ -180,7 +180,9 @@ FitCTMCdive <- function(forms, dat, print = TRUE) {
     map <- c(map, list(log_lambda_dive = as.factor(NA),
                        s_dive = factor(NA)))
     tmb_parameters$s_dive <- 0
+    tmb_parameters$log_lambda_dive <- 0 
     sm$S_dive <- as(matrix(0, 1, 1), "sparseMatrix")
+    sm$S_dive_n <- 0 
     sm$A_grid_dive <- matrix(1, length(sm$indD), 1)
   } else {
     random <- c(random, "s_dive")
@@ -190,7 +192,9 @@ FitCTMCdive <- function(forms, dat, print = TRUE) {
     map <- c(map, list(log_lambda_surf = as.factor(NA),
                        s_surf = factor(NA)))
     tmb_parameters$s_surf <- 0
+    tmb_parameters$log_lambda_surf <- 0 
     sm$S_surface <- as(matrix(0, 1, 1), "sparseMatrix")
+    sm$S_surface_n <- 0
     sm$A_grid_surface <- matrix(1, length(sm$indS), 2)
   } else {
     random <- c(random, "s_surf")
