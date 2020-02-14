@@ -233,7 +233,7 @@ FitCTMCdive <- function(forms, dat, print = TRUE) {
   ## Fit Model
   if (print) cat("Fitting model.......\n")
   t0 <- Sys.time()
-  mod <- do.call(optim, obj)
+  mod <- optim(obj$par, obj$fn, obj$gr)
   #mod <- nlminb(obj$par, obj$fn, obj$gr)
   t1 <- Sys.time()
   diff <- difftime(t1, t0)
