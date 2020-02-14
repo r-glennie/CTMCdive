@@ -4,6 +4,7 @@
 #'
 #' @param forms formulae
 #' @param dat data frame (see fitCTMCdive)
+#' @param min_dwell start point for the integrals
 #' @param nint number of integration points
 #'
 #' @return list of matrices required to fit the model
@@ -11,7 +12,7 @@
 #' @importFrom mgcv gam predict.gam
 #' @importFrom methods as
 #' @importFrom Matrix bdiag
-MakeMatrices <- function(forms, dat, nint = 10000) {
+MakeMatrices <- function(forms, dat, min_dwell, nint = 10000) {
 
   # results list
   res <- list()
@@ -118,11 +119,12 @@ MakeMatrices <- function(forms, dat, nint = 10000) {
   indD <- indS <- matrix(0, nrow = n, ncol = nint)
   dive_end <- dat$time + dat$dive
   for (i in 1:nint) {
-    wh <- which(ints[i] <= dat$time[-1] & ints[i] >= dive_end[-n])
+    wh <- which(ints[i] <= dat$time[-1] &
+                ints[i] >= (dive_end[-n]+min_dwell$dive))
     if (length(wh) != 0) {
       indD[wh, i] <- 1
     }
-    wh <- which(ints[i] >= dat$time & ints[i] <= dive_end)
+    wh <- which(ints[i] >= (dat$time+min_dwell$surface) & ints[i] <= dive_end)
     if (length(wh) != 0) {
       indS[wh, i] <- 1
     }
@@ -141,6 +143,7 @@ MakeMatrices <- function(forms, dat, nint = 10000) {
 #' @param forms a \code{list} with formulae for \code{dive} and \code{surface} variables
 #' @param dat a \code{data.frame} with at least three columns named \code{dive} (dive durations), \code{surface} (surface durations), and \code{time} (start time of dive); all of these must be numeric.
 #' @param print if \code{TRUE}, useful output is printed
+#' @param min_dwell Minimum dwell time in a state. Useful if, for example, dives are only categorised as such if they are longer than a certain interval. Named list, needs to be in the same units as \code{time}, \code{surface} and \code{dive}.
 #'
 #' @return a CTMCdive model object: a list of the estimated results (\code{res}), variance matrix (\code{var}), fitted model returned from \code{optim} (\code{mod}), output from \code{sdreport} (\code{res}), design matrices (\code{Xs}), smoothing data (\code{sm}), formulae (\code{forms{), indices that divide par between dive and surface parameters (\code{len}), data (\code{dat}), indicators for smooths used (\code{lambda}), and model type (\code{model}).
 #' @export
@@ -148,7 +151,8 @@ MakeMatrices <- function(forms, dat, nint = 10000) {
 #'             pnorm predict qnorm quantile terms
 #' @importFrom TMB MakeADFun sdreport
 #' @useDynLib ctmc_dive
-FitCTMCdive <- function(forms, dat, print = TRUE) {
+FitCTMCdive <- function(forms, dat, print = TRUE,
+                        min_dwell=list(dive=0, surface=0)) {
 
   ## Make design matrices and parameter vector
   if (print) cat("Computing design matrices.......")
@@ -160,7 +164,7 @@ FitCTMCdive <- function(forms, dat, print = TRUE) {
   # smoothing data
   random <- NULL
   map <- list()
-  sm <- MakeMatrices(forms, dat)
+  sm <- MakeMatrices(forms, dat, min_dwell)
 
   len <- c(ncol(sm$Xs_dive), ncol(sm$Xs_surface))
   names(len) <- c("dive", "surface")

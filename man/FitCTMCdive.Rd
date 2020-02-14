@@ -4,7 +4,7 @@
 \alias{FitCTMCdive}
 \title{Fits continuous-time Markov chain to dive and surface duration data}
 \usage{
-FitCTMCdive(forms, dat, print = TRUE)
+FitCTMCdive(forms, dat, print = TRUE, min_dwell = list(dive = 0, surface = 0))
 }
 \arguments{
 \item{forms}{a \code{list} with formulae for \code{dive} and \code{surface} variables}
@@ -12,6 +12,8 @@ FitCTMCdive(forms, dat, print = TRUE)
 \item{dat}{a \code{data.frame} with at least three columns named \code{dive} (dive durations), \code{surface} (surface durations), and \code{time} (start time of dive); all of these must be numeric.}
 
 \item{print}{if \code{TRUE}, useful output is printed}
+
+\item{min_dwell}{Minimum dwell time in a state. Useful if, for example, dives are only categorised as such if they are longer than a certain interval. Named list, needs to be in the same units as \code{time}, \code{surface} and \code{dive}.}
 }
 \value{
 
