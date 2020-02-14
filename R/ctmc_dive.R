@@ -221,12 +221,16 @@ FitCTMCdive <- function(forms, dat, print = TRUE) {
                    hessian = TRUE, DLL = "ctmc_dive", silent=!print)
   if(print) cat("done\n")
 
+  # find the normalization for the GMRF (smooths)
+  if (print) cat("Finding normalization.......")
+  obj <- normalize(obj, flag="flag")
+  if(print) cat("done\n")
+
   ## Fit Model
   if (print) cat("Fitting model.......\n")
-obj <- normalize(obj, flag="flag")
   t0 <- Sys.time()
-#  mod <- do.call(optim, obj)
-mod <- optim(obj$par, obj$fn, obj$gr, method="BFGS")
+  mod <- do.call(optim, obj)
+  #mod <- nlminb(obj$par, obj$fn, obj$gr)
   t1 <- Sys.time()
   diff <- difftime(t1, t0)
   if(print) cat("Model fit in ", signif(diff[[1]], 2), attr(diff, "units"), "\n")
