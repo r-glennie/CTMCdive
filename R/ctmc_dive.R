@@ -27,6 +27,8 @@ MakeMatrices <- function(forms, dat, nint = 10000) {
       for(j in seq_along(smoo$S)){
         S_dive_list <- c(S_dive_list, as(smoo$S[[j]], "sparseMatrix"))
         res$S_dive_n <- c(res$S_dive_n, nrow(smoo$S[[j]]))
+        res$s_dive_k <- c(res$s_dive_k, smoo$bs.dim)
+        res$s_dive_names <- c(res$s_dive_names, attr(smoo$sp, "names"))
       }
     }
     # build a block diagonal matrix
@@ -51,6 +53,8 @@ MakeMatrices <- function(forms, dat, nint = 10000) {
       for(j in seq_along(smoo$S)){
         S_surface_list <- c(S_surface_list, as(smoo$S[[j]], "sparseMatrix"))
         res$S_surface_n <- c(res$S_surface_n, nrow(smoo$S[[j]]))
+        res$s_surface_k <- c(res$s_surface_k, smoo$bs.dim)
+        res$s_surface_names <- c(res$s_surface_names, attr(smoo$sp, "names"))
       }
     }
     # build a block diagonal matrix
@@ -320,14 +324,73 @@ summary.CTMCdive <- function(object, ...) {
 
   cat(rep("-", 30), "\n")
   cat("DIVE INTENSITY\n")
+  cat("\nFixed effects:\n")
   print(signif(object$res$dive, 4))
   cat("\n")
+
+  if(!is.null(object$sm$S_dive)) {
+    sdive <- data.frame(Term = object$sm$s_dive_names)
+    sdive[["k'"]] <- NA
+    sdive$EDF <- NA
+
+    starti <- 1
+    for(i in seq_along(object$sm$S_dive_n)){
+      lambda <- object$rep$par.fixed
+      lambda <- exp(lambda[grepl("^log_lambda_dive", names(lambda))])
+      Sn <- object$sm$S_dive_n[i]
+      S <- object$sm$S_dive[starti:(starti+Sn-1),
+                            starti:(starti+Sn-1), drop=FALSE]
+      X <- object$sm$A_dive[starti:(starti+Sn-1),
+                            starti:(starti+Sn-1), drop=FALSE]
+
+      sdive[["k'"]][i] <- nrow(S)
+      sdive$EDF[i] <- EDF_f(X, S, lambda, Sn)
+      starti <- starti + Sn
+    }
+
+    sdive$EDF <- signif(sdive$EDF, 4)
+    cat("\nSmooth terms:\n")
+    print(sdive)
+    cat("\n")
+  }
+
   cat(rep("-", 30), "\n")
+
   cat("SURFACE INTENSITY\n")
+  cat("\nFixed effects:\n")
   print(signif(object$res$surface, 4))
+
+  if(!is.null(object$sm$S_surface)) {
+    ssurface <- data.frame(Term = object$sm$s_surface_names)
+    ssurface[["k'"]] <- NA
+    ssurface$EDF <- NA
+
+    starti <- 1
+    for(i in seq_along(object$sm$S_surface_n)){
+      lambda <- object$rep$par.fixed
+      lambda <- exp(lambda[grepl("^log_lambda_surf", names(lambda))])
+      Sn <- object$sm$S_surface_n[i]
+      S <- object$sm$S_surface[starti:(starti+Sn-1),
+                               starti:(starti+Sn-1), drop=FALSE]
+      X <- object$sm$A_surf[starti:(starti+Sn-1),
+                            starti:(starti+Sn-1), drop=FALSE]
+
+      ssurface[["k'"]][i] <- nrow(S)
+      ssurface$EDF[i] <- EDF_f(X, S, lambda, Sn)
+      starti <- starti + Sn
+    }
+
+    ssurface$EDF <- signif(ssurface$EDF, 4)
+    cat("\nSmooth terms:\n")
+    print(ssurface)
+    cat("\n")
+  }
+
+
+
   cat("\n")
   invisible(object)
- }
+}
 
 print.CTMCdive <- summary.CTMCdive
 
@@ -518,23 +581,6 @@ AIC.CTMCdive <- function(object, ..., k=2){
   # get the models
   models <- list(object, ...)
 
-  # EDF for smooth terms = trace(F)
-  # F = (Xt X + sp*S)^-1 Xt X
-  # Wood 2017 p 212
-  EDF_f <- function(X, S, lambda, Sn){
-    # duplicate lambda enough times
-    lambda <- rep(lambda, Sn)
-    # calculate lambda*S
-    Sbig <- S * lambda
-
-    # calculate the hat matrix
-    XtX <- t(X) %*% X
-    Fi <- solve(XtX + Sbig)
-    F <- Fi %*% XtX
-
-    # return the trace
-    sum(diag(F))
-  }
 
   # build the table
   aics <- matrix(NA, nrow=length(models), ncol=2)
@@ -568,3 +614,20 @@ AIC.CTMCdive <- function(object, ..., k=2){
 }
 
 
+# EDF for smooth terms = trace(F)
+# F = (Xt X + sp*S)^-1 Xt X
+# Wood 2017 p 212
+EDF_f <- function(X, S, lambda, Sn){
+  # duplicate lambda enough times
+  lambda <- rep(lambda, Sn)
+  # calculate lambda*S
+  Sbig <- S * lambda
+
+  # calculate the hat matrix
+  XtX <- t(X) %*% X
+  Fi <- solve(XtX + Sbig)
+  F <- Fi %*% XtX
+
+  # return the trace
+  sum(diag(F))
+}
