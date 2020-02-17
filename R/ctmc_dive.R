@@ -42,7 +42,9 @@ MakeMatrices <- function(forms, dat, min_dwell, nint = 10000) {
   res$Xs_dive <- mm[, 1:gam_dive$nsdf, drop=FALSE]
   # smooth design matrix
   res$A_dive <- mm[, -c(1:gam_dive$nsdf), drop=FALSE]
-
+  # weibull design matrix 
+  res$W_dive <- matrix(c(0, log(dat$surface[-1] + 1e-10)), nr = nrow(dat), nc = 1)
+  
   ## surface model
   # GAM setup
   gam_surface <- gam(forms[["surface"]], data = dat, method = "REML")
@@ -70,7 +72,9 @@ MakeMatrices <- function(forms, dat, min_dwell, nint = 10000) {
   res$Xs_surface <- mm[, 1:gam_surface$nsdf, drop=FALSE]
   # smooth design matrix
   res$A_surf <- mm[, -c(1:gam_surface$nsdf), drop=FALSE]
-
+  # weibull design matrix
+  res$W_surf <- matrix(log(dat$dive + 1e-10), nr = nrow(dat), nc = 1)
+  
   # construct prediction grid
   n <- nrow(dat)
   ints <- seq(dat$time[1],
@@ -111,10 +115,22 @@ MakeMatrices <- function(forms, dat, min_dwell, nint = 10000) {
   res$Xs_grid_dive <- pred_mat_dive[, 1:gam_dive$nsdf, drop=FALSE]
   res$A_grid_dive <- pred_mat_dive[, -c(1:gam_dive$nsdf), drop=FALSE]
 
+  # weibull for integration grid 
+  t_dive <- c(-1e-10, dat$time + dat$dive, max(dat$time + dat$surface + dat$dive))
+  cut_dive <- as.numeric(cut(ints, breaks = t_dive))
+  dt_dive <- ints - t_dive[cut_dive]
+  res$W_grid_dive <- log(dt_dive + 1e-10)
+  
   pred_mat_surface <- pred_mat_maker(gam_surface, dat, ints)
   res$Xs_grid_surface <- pred_mat_surface[, 1:gam_surface$nsdf, drop=FALSE]
   res$A_grid_surface <- pred_mat_surface[, -c(1:gam_surface$nsdf), drop=FALSE]
 
+  # weibull for integration grid 
+  t_surf <- c(-1e-10, dat$time, max(dat$time + dat$surface + dat$dive))
+  cut_surf <- as.numeric(cut(ints, breaks = t_surf))
+  dt_surf <- ints - t_surf[cut_surf] 
+  res$W_grid_surf <- log(dt_surf + 1e-10)
+  
   # get integration matrices
   indD <- indS <- matrix(0, nrow = n, ncol = nint)
   dive_end <- dat$time + dat$dive
@@ -179,6 +195,8 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
   ## Setup TMB parameter list
   tmb_parameters <- list(par_dive = par_dive,
                          par_surf = par_surf,
+                         log_kappa_dive = 0, 
+                         log_kappa_surf = 0, 
                          log_lambda_dive = rep(0, length(sm$S_dive_n)),
                          log_lambda_surf = rep(0, length(sm$S_surface_n)))
 
@@ -220,6 +238,10 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
                   A_surf = sm$A_surf,
                   A_grid_surface = sm$A_grid_surface,
                   A_grid_dive = sm$A_grid_dive,
+                  W_dive = sm$W_dive, 
+                  W_surf = sm$W_surf, 
+                  W_grid_surf = sm$W_grid_surf, 
+                  W_grid_dive = sm$W_grid_dive, 
                   Xs_grid_surface = sm$Xs_grid_surface,
                   Xs_grid_dive = sm$Xs_grid_dive,
                   indD = sm$indD,
@@ -411,15 +433,15 @@ predict.CTMCdive <- function(object, newdata = NULL, ...) {
   len <- object$len
   par_dive <- par[1:len[1]]
   par_surf <- par[(len[1] + 1):(len[1] + len[2])]
-
+  
   if(!is.null(newdata)){
     stop("New data not supported yet!")
   }
-
+  
   # linear predictors
   nu_dive <- object$Xs_dive %*% par_dive
   nu_surf <- object$Xs_surface %*% par_surf
-
+  
   # create time grid
   ints <- object$sm$ints
   nints <- length(ints)
@@ -431,7 +453,7 @@ predict.CTMCdive <- function(object, newdata = NULL, ...) {
   }
   lambda_dive[ints > object$dat$time[nrow(object$dat)]] <- nu_dive[length(nu_dive)]
   lambda_surf[ints > object$dat$time[nrow(object$dat)]] <- nu_surf[length(nu_surf)]
-
+  
   if (any(names(object$rep$par.random) == "s_surf")) {
     x_surf <- object$rep$par.random[names(object$rep$par.random) == "s_surf"]
     lambda_surf <- lambda_surf + (object$sm$A_grid_surface %*% x_surf)
@@ -440,16 +462,25 @@ predict.CTMCdive <- function(object, newdata = NULL, ...) {
     x_dive <- object$rep$par.random[names(object$rep$par.random) == "s_dive"]
     lambda_dive <- lambda_dive + (object$sm$A_grid_dive %*% x_dive)
   }
-  lambda_dive <- exp(lambda_dive)
-  lambda_surf <- exp(lambda_surf)
-
+  # weibull
+  log_kappa_dive <- mod$rep$par.fixed["log_kappa_dive"]
+  log_kappa_surf <- mod$rep$par.fixed["log_kappa_surf"]
+  kappa_dive <- exp(log_kappa_dive)
+  kappa_surf <- exp(log_kappa_surf)
+  lambda_dive <- kappa_dive * lambda_dive + log_kappa_dive
+  lambda_surf <- kappa_surf * lambda_surf + log_kappa_surf
+  
   # get expectations
   dt <- mean(diff(ints))
   exp_dive <- exp_surf <- rep(0, nrow(object$dat))
   r_dive <- r_surf <- rep(0, nrow(object$dat))
   for (i in 1:nrow(object$dat)) {
-    Ldive <- cumsum(lambda_dive[ints > object$dat$time[i] + object$dat$dive[i]])
-    Lsurf <- cumsum(lambda_surf[ints > (object$dat$time[i])])
+    Ldive <- lambda_dive[ints > object$dat$time[i] + object$dat$dive[i]] + (kappa_dive - 1) * 
+      log(ints[ints > object$dat$time[i] + object$dat$dive[i]] - object$dat$time[i] - object$dat$dive[i])
+    Ldive <- cumsum(exp(Ldive))
+    Lsurf <- lambda_surf[ints > object$dat$time[i]] + (kappa_surf - 1) * 
+      log(ints[ints > object$dat$time[i]] - object$dat$time[i])
+    Lsurf <- cumsum(exp(Lsurf))
     Sdive <- exp(-Ldive * dt)
     Ssurf <- exp(-Lsurf * dt)
     # E(dive) comes from surface intensity and vice-versa
