@@ -136,11 +136,11 @@ MakeMatrices <- function(forms, dat, min_dwell, nint = 10000) {
   dive_end <- dat$time + dat$dive
   for (i in 1:nint) {
     wh <- which(ints[i] <= dat$time[-1] &
-                ints[i] >= (dive_end[-n]+min_dwell$dive))
+                ints[i] >= (dive_end[-n]+min_dwell$surface))
     if (length(wh) != 0) {
       indD[wh, i] <- 1
     }
-    wh <- which(ints[i] >= (dat$time+min_dwell$surface) & ints[i] <= dive_end)
+    wh <- which(ints[i] >= (dat$time+min_dwell$dive) & ints[i] <= dive_end)
     if (length(wh) != 0) {
       indS[wh, i] <- 1
     }
