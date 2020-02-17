@@ -209,7 +209,7 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
     tmb_parameters$log_lambda_dive <- 0 
     sm$S_dive <- as(matrix(0, 1, 1), "sparseMatrix")
     sm$S_dive_n <- 0 
-    sm$A_grid_dive <- matrix(1, length(sm$indD), 1)
+    sm$A_grid_dive <- matrix(1, ncol(sm$indD), 1)
   } else {
     random <- c(random, "s_dive")
     tmb_parameters$s_dive <- rep(0, ncol(sm$S_dive))
@@ -221,7 +221,7 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
     tmb_parameters$log_lambda_surf <- 0 
     sm$S_surface <- as(matrix(0, 1, 1), "sparseMatrix")
     sm$S_surface_n <- 0
-    sm$A_grid_surface <- matrix(1, length(sm$indS), 2)
+    sm$A_grid_surface <- matrix(1, ncol(sm$indS), 2)
   } else {
     random <- c(random, "s_surf")
     tmb_parameters$s_surf <- rep(0, ncol(sm$S_surface))
