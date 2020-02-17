@@ -2,6 +2,7 @@
 % Please edit documentation in R/ctmc_dive.R
 \name{summary.CTMCdive}
 \alias{summary.CTMCdive}
+\alias{print.CTMCdive}
 \title{Print summary of CTMCdive object}
 \usage{
 \method{summary}{CTMCdive}(object, ...)

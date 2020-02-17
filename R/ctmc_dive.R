@@ -335,6 +335,7 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
 #' @param \dots unused (for S3 compatability)
 #'
 #' @return prints a summary
+#' @aliases print.CTMCdive
 #' @export
 summary.CTMCdive <- function(object, ...) {
   cat("Continuous-time Markov Chain Diving Model\n")
@@ -417,7 +418,9 @@ summary.CTMCdive <- function(object, ...) {
   invisible(object)
 }
 
-print.CTMCdive <- summary.CTMCdive
+#' @export
+print.CTMCdive <- function(x)
+  summary.CTMCdive(x)
 
 #' Predict mean duration from fitted CTMC model for dives and surfacing
 #'
