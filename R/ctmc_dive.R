@@ -357,7 +357,7 @@ summary.CTMCdive <- function(object, ...) {
   print(signif(object$res$dive, 4))
   cat("\n")
 
-  if(!is.null(object$sm$S_dive)) {
+  if(!is.null(object$sm$s_dive_names)) {
     sdive <- data.frame(Term = object$sm$s_dive_names)
     sdive[["k'"]] <- NA
     sdive$EDF <- NA
@@ -389,7 +389,7 @@ summary.CTMCdive <- function(object, ...) {
   cat("\nFixed effects:\n")
   print(signif(object$res$surface, 4))
 
-  if(!is.null(object$sm$S_surface)) {
+  if(!is.null(object$sm$s_surface_names)) {
     ssurface <- data.frame(Term = object$sm$s_surface_names)
     ssurface[["k'"]] <- NA
     ssurface$EDF <- NA
