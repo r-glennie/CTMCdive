@@ -363,9 +363,9 @@ summary.CTMCdive <- function(object, ...) {
     sdive$EDF <- NA
 
     starti <- 1
+    lambda <- object$rep$par.fixed
+    lambda <- exp(lambda[grepl("^log_lambda_dive", names(lambda))])
     for(i in seq_along(object$sm$S_dive_n)){
-      lambda <- object$rep$par.fixed
-      lambda <- exp(lambda[grepl("^log_lambda_dive", names(lambda))])
       Sn <- object$sm$S_dive_n[i]
       S <- object$sm$S_dive[starti:(starti+Sn-1),
                             starti:(starti+Sn-1), drop=FALSE]
@@ -373,7 +373,7 @@ summary.CTMCdive <- function(object, ...) {
                             starti:(starti+Sn-1), drop=FALSE]
 
       sdive[["k'"]][i] <- nrow(S)
-      sdive$EDF[i] <- EDF_f(X, S, lambda, Sn)
+      sdive$EDF[i] <- EDF_f(X, S, lambda[i], Sn)
       starti <- starti + Sn
     }
 
@@ -400,9 +400,9 @@ summary.CTMCdive <- function(object, ...) {
     ssurface$EDF <- NA
 
     starti <- 1
+    lambda <- object$rep$par.fixed
+    lambda <- exp(lambda[grepl("^log_lambda_surf", names(lambda))])
     for(i in seq_along(object$sm$S_surface_n)){
-      lambda <- object$rep$par.fixed
-      lambda <- exp(lambda[grepl("^log_lambda_surf", names(lambda))])
       Sn <- object$sm$S_surface_n[i]
       S <- object$sm$S_surface[starti:(starti+Sn-1),
                                starti:(starti+Sn-1), drop=FALSE]
@@ -410,7 +410,7 @@ summary.CTMCdive <- function(object, ...) {
                             starti:(starti+Sn-1), drop=FALSE]
 
       ssurface[["k'"]][i] <- nrow(S)
-      ssurface$EDF[i] <- EDF_f(X, S, lambda, Sn)
+      ssurface$EDF[i] <- EDF_f(X, S, lambda[i], Sn)
       starti <- starti + Sn
     }
 
