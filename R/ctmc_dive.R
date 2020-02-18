@@ -383,6 +383,11 @@ summary.CTMCdive <- function(object, ...) {
     cat("\n")
   }
 
+  cat("\nkappa: ",
+      signif(exp(object$rep$par.fixed[names(object$rep$par.fixed) == "log_kappa_dive"]), 4))
+  cat("\n")
+  cat("\n")
+
   cat(rep("-", 30), "\n")
 
   cat("SURFACE INTENSITY\n")
@@ -414,6 +419,10 @@ summary.CTMCdive <- function(object, ...) {
     print(ssurface)
     cat("\n")
   }
+  cat("\nkappa: ",
+      signif(exp(object$rep$par.fixed[names(object$rep$par.fixed) == "log_kappa_surf"]), 4))
+  cat("\n")
+  cat("\n")
 
 
 
