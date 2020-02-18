@@ -629,12 +629,15 @@ AIC.CTMCdive <- function(object, ..., k=2){
 
     # dive component
     dive_lambda <- exp(this_mod$rep$par.fixed[grepl("^log_lambda_dive", names(this_mod$rep$par.fixed))])
-    dive_edf <- EDF_f(this_mod$sm$A_dive, this_mod$sm$S_dive, dive_lambda, this_mod$sm$S_dive_n)
+    dive_edf <- EDF_f(this_mod$sm$A_dive, this_mod$sm$S_dive,
+                      dive_lambda, this_mod$sm$S_dive_n)
     # surface component
     surface_lambda <- exp(this_mod$rep$par.fixed[grepl("^log_lambda_surf", names(this_mod$rep$par.fixed))])
-    surface_edf <- EDF_f(this_mod$sm$A_surf, this_mod$sm$S_surface, surface_lambda, this_mod$sm$S_surface_n)
-    # DF for fixed effects
-    fixed_edf <- length(this_mod$rep$par.fixed) - (length(dive_lambda) + length(surface_lambda))
+    surface_edf <- EDF_f(this_mod$sm$A_surf, this_mod$sm$S_surface,
+                         surface_lambda, this_mod$sm$S_surface_n)
+    # DF for fixed effects (not smoopars)
+    fixed_edf <- length(this_mod$rep$par.fixed) -
+                   (length(dive_lambda) + length(surface_lambda))
     # total
     total_edf <- dive_edf + surface_edf + fixed_edf
 
@@ -657,6 +660,10 @@ AIC.CTMCdive <- function(object, ..., k=2){
 # F = (Xt X + sp*S)^-1 Xt X
 # Wood 2017 p 212
 EDF_f <- function(X, S, lambda, Sn){
+
+  if(length(lambda)==0){
+    return(0)
+  }
   # duplicate lambda enough times
   lambda <- rep(lambda, Sn)
   # calculate lambda*S
