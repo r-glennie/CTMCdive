@@ -348,6 +348,9 @@ summary.CTMCdive <- function(object, ...) {
   print(object$forms[[2]])
   cat("\n")
 
+  cat("AIC:", AIC(object)$AIC,"\n")
+  cat("\n")
+
   cat(rep("-", 30), "\n")
   cat("DIVE INTENSITY\n")
   cat("\nFixed effects:\n")
@@ -435,15 +438,15 @@ predict.CTMCdive <- function(object, newdata = NULL, ...) {
   len <- object$len
   par_dive <- par[1:len[1]]
   par_surf <- par[(len[1] + 1):(len[1] + len[2])]
-  
+
   if(!is.null(newdata)){
     stop("New data not supported yet!")
   }
-  
+
   # linear predictors
   nu_dive <- object$Xs_dive %*% par_dive
   nu_surf <- object$Xs_surface %*% par_surf
-  
+
   # create time grid
   ints <- object$sm$ints
   nints <- length(ints)
@@ -455,7 +458,7 @@ predict.CTMCdive <- function(object, newdata = NULL, ...) {
   }
   lambda_dive[ints > object$dat$time[nrow(object$dat)]] <- nu_dive[length(nu_dive)]
   lambda_surf[ints > object$dat$time[nrow(object$dat)]] <- nu_surf[length(nu_surf)]
-  
+
   if (any(names(object$rep$par.random) == "s_surf")) {
     x_surf <- object$rep$par.random[names(object$rep$par.random) == "s_surf"]
     lambda_surf <- lambda_surf + (object$sm$A_grid_surface %*% x_surf)
@@ -471,7 +474,7 @@ predict.CTMCdive <- function(object, newdata = NULL, ...) {
   kappa_surf <- exp(log_kappa_surf)
   lambda_dive <- kappa_dive * lambda_dive + log_kappa_dive
   lambda_surf <- kappa_surf * lambda_surf + log_kappa_surf
-  
+
   # get expectations
   dt <- mean(diff(ints))
   exp_dive <- exp_surf <- rep(0, nrow(object$dat))
@@ -596,7 +599,7 @@ get_samples <- function(mod, n=200){
 #' @note This does not account for degrees of freedom reduction with smooths (i.e if lambda > 0)
 #' @export
 logLik.CTMCdive <- function(object, ...) {
-  val <- -object$mod$value
+  val <- -object$mod$objective
   npar <- length(object$mod$par)
   llk <- val
   attributes(llk)$df <- npar
@@ -617,7 +620,6 @@ AIC.CTMCdive <- function(object, ..., k=2){
 
   # get the models
   models <- list(object, ...)
-
 
   # build the table
   aics <- matrix(NA, nrow=length(models), ncol=2)
