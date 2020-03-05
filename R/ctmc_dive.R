@@ -477,8 +477,8 @@ predict.CTMCdive <- function(object, newdata = NULL, ...) {
     lambda_dive <- lambda_dive + (object$sm$A_grid_dive %*% x_dive)
   }
   # weibull
-  log_kappa_dive <- mod$rep$par.fixed["log_kappa_dive"]
-  log_kappa_surf <- mod$rep$par.fixed["log_kappa_surf"]
+  log_kappa_dive <- object$rep$par.fixed["log_kappa_dive"]
+  log_kappa_surf <- object$rep$par.fixed["log_kappa_surf"]
   kappa_dive <- exp(log_kappa_dive)
   kappa_surf <- exp(log_kappa_surf)
   lambda_dive <- kappa_dive * lambda_dive + log_kappa_dive
@@ -538,7 +538,7 @@ plot.CTMCdive <- function(x, quant = 1, pick = NULL, pred = NULL, xlim = NULL, s
 
   if(se){
     # get uncertainty
-    ss <- get_samples(mod, n_samp)
+    ss <- get_samples(x, n_samp)
     # function to apply
     afn <- function(pars, m){
       m$rep$par.fixed <- pars[1:length(m$rep$par.fixed)]
@@ -546,7 +546,7 @@ plot.CTMCdive <- function(x, quant = 1, pick = NULL, pred = NULL, xlim = NULL, s
       pp <- predict(m)
       return(c(pp$surface, pp$dive))
     }
-    samples <- apply(ss, 1, afn, m=mod)
+    samples <- apply(ss, 1, afn, m=x)
     surface_samples <- samples[1:length(time), ]
     dive_samples <- samples[-(1:length(time)), ]
   }
