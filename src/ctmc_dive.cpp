@@ -54,24 +54,27 @@ Type objective_function<Type>::operator() ()
   // add smoothing penalties, need to do this wonky bit to unblock S in each case
   // data setup
   int S_start = 0;
-  
-  // dive bit
-  for(int i = 0; i < S_dive_n.size(); i++) {
-    int Sn = S_dive_n(i);
-    SparseMatrix<Type> this_S = S_dive.block(S_start, S_start, Sn, Sn);
-    vector<Type> beta_s = s_dive.segment(S_start, Sn);
-    nll -= Type(0.5) * Sn * log_lambda_dive(i) - 0.5 * lambda_dive(i) * GMRF(this_S, false).Quadform(beta_s);
-    S_start += Sn;
+  if (S_dive_n.size() > 0) {
+    // dive bit
+    for(int i = 0; i < S_dive_n.size(); i++) {
+      int Sn = S_dive_n(i);
+      SparseMatrix<Type> this_S = S_dive.block(S_start, S_start, Sn, Sn);
+      vector<Type> beta_s = s_dive.segment(S_start, Sn);
+      nll -= Type(0.5) * Sn * log_lambda_dive(i) - 0.5 * lambda_dive(i) * GMRF(this_S, false).Quadform(beta_s);
+      S_start += Sn;
+    }
   }
   
-  // surface bit
-  S_start = 0;
-  for(int i = 0; i < S_surface_n.size(); i++) {
-    int Sn = S_surface_n(i);
-    SparseMatrix<Type> this_S = S_surface.block(S_start, S_start, Sn, Sn);
-    vector<Type> beta_s = s_surf.segment(S_start, Sn);
-    nll -= Type(0.5) * Sn * log_lambda_surf(i) - 0.5 * lambda_surf(i) * GMRF(this_S, false).Quadform(beta_s);
-    S_start += Sn;
+  if (S_surface_n.size() > 0) {
+    // surface bit
+    S_start = 0;
+    for(int i = 0; i < S_surface_n.size(); i++) {
+      int Sn = S_surface_n(i);
+      SparseMatrix<Type> this_S = S_surface.block(S_start, S_start, Sn, Sn);
+      vector<Type> beta_s = s_surf.segment(S_start, Sn);
+      nll -= Type(0.5) * Sn * log_lambda_surf(i) - 0.5 * lambda_surf(i) * GMRF(this_S, false).Quadform(beta_s);
+      S_start += Sn;
+    }
   }
   
   // Return un-normalized density on request
