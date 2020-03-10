@@ -54,7 +54,7 @@ Type objective_function<Type>::operator() ()
   // add smoothing penalties, need to do this wonky bit to unblock S in each case
   // data setup
   int S_start = 0;
-  if (S_dive_n.size() > 0) {
+  if (S_dive_n(0) > 0.5) {
     // dive bit
     for(int i = 0; i < S_dive_n.size(); i++) {
       int Sn = S_dive_n(i);
@@ -65,7 +65,7 @@ Type objective_function<Type>::operator() ()
     }
   }
   
-  if (S_surface_n.size() > 0) {
+  if (S_surface_n(0) > 0.5) {
     // surface bit
     S_start = 0;
     for(int i = 0; i < S_surface_n.size(); i++) {
@@ -83,17 +83,17 @@ Type objective_function<Type>::operator() ()
   
   // calculate log intensities
   vector<Type> le_dive = Xdive * par_dive; 
-  if (S_dive_n.size() > 0) le_dive += A_dive * s_dive;
+  if (S_dive_n(0) > 0.5) le_dive += A_dive * s_dive;
   le_dive = kappa_dive * le_dive + (kappa_dive - 1) * W_dive; 
   le_dive = (le_dive.array() + log_kappa_dive).matrix(); 
   vector<Type> le_surf  = Xsurf * par_surf; 
-  if (S_surface_n.size() > 0) le_surf += A_surf * s_surf;
+  if (S_surface_n(0) > 0.5) le_surf += A_surf * s_surf;
   le_surf = kappa_surf * le_surf + (kappa_surf - 1) * W_surf; 
   le_surf = (le_surf.array() + log_kappa_surf).matrix(); 
   
   // Integral of dive intensity
   vector<Type> int_dive = Xs_grid_dive * par_dive; 
-  if (S_dive_n.size() > 0) int_dive += A_grid_dive * s_dive;
+  if (S_dive_n(0) > 0.5) int_dive += A_grid_dive * s_dive;
   int_dive = kappa_dive * int_dive + (kappa_dive - 1) * W_grid_dive; 
   int_dive = (int_dive.array() + log_kappa_dive).matrix(); 
   int_dive = exp(int_dive);
@@ -104,7 +104,7 @@ Type objective_function<Type>::operator() ()
   
   // Integral of surface intensity
   vector<Type> int_surf = Xs_grid_surface * par_surf; 
-  if (S_surface_n.size() > 0) int_surf += A_grid_surface * s_surf;
+  if (S_surface_n(0) > 0.5) int_surf += A_grid_surface * s_surf;
   int_surf = kappa_surf * int_surf + (kappa_surf - 1) * W_grid_surf; 
   int_surf = (int_surf.array() + log_kappa_surf).matrix(); 
   int_surf = exp(int_surf);
