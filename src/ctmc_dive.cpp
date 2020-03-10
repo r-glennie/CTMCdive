@@ -79,15 +79,18 @@ Type objective_function<Type>::operator() ()
   if (flag == 0) return nll;
   
   // calculate log intensities
-  vector<Type> le_dive = Xdive * par_dive + A_dive * s_dive;
+  vector<Type> le_dive = Xdive * par_dive; 
+  if (S_dive_n.size() > 0) le_dive += A_dive * s_dive;
   le_dive = kappa_dive * le_dive + (kappa_dive - 1) * W_dive; 
   le_dive = (le_dive.array() + log_kappa_dive).matrix(); 
-  vector<Type> le_surf  = Xsurf * par_surf + A_surf * s_surf;
+  vector<Type> le_surf  = Xsurf * par_surf; 
+  if (S_surface_n.size() > 0) le_surf += A_surf * s_surf;
   le_surf = kappa_surf * le_surf + (kappa_surf - 1) * W_surf; 
   le_surf = (le_surf.array() + log_kappa_surf).matrix(); 
   
   // Integral of dive intensity
-  vector<Type> int_dive = Xs_grid_dive * par_dive + A_grid_dive * s_dive;
+  vector<Type> int_dive = Xs_grid_dive * par_dive; 
+  if (S_dive_n.size() > 0) int_dive += A_grid_dive * s_dive;
   int_dive = kappa_dive * int_dive + (kappa_dive - 1) * W_grid_dive; 
   int_dive = (int_dive.array() + log_kappa_dive).matrix(); 
   int_dive = exp(int_dive);
@@ -97,7 +100,8 @@ Type objective_function<Type>::operator() ()
   subint_dive *= dt;
   
   // Integral of surface intensity
-  vector<Type> int_surf = Xs_grid_surface * par_surf + A_grid_surface * s_surf;
+  vector<Type> int_surf = Xs_grid_surface * par_surf; 
+  if (S_surface_n.size() > 0) int_surf += A_grid_surface * s_surf;
   int_surf = kappa_surf * int_surf + (kappa_surf - 1) * W_grid_surf; 
   int_surf = (int_surf.array() + log_kappa_surf).matrix(); 
   int_surf = exp(int_surf);
