@@ -4,7 +4,7 @@
 \alias{MakeMatrices}
 \title{Compute matrices required to fit the model}
 \usage{
-MakeMatrices(forms, dat, min_dwell, nint = 10000)
+MakeMatrices(forms, dat, min_dwell, nint = 10000, gams = NULL)
 }
 \arguments{
 \item{forms}{formulae}

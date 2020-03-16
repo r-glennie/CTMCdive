@@ -686,3 +686,30 @@ EDF_f <- function(X, S, lambda, Sn){
   # return the trace
   sum(diag(F))
 }
+
+#' Temporary Exposure effect extractor 
+#'
+#' @param mod model you want exposure effect for 
+#' @param pick whether to pick effect out of dive or surface model 
+#'
+#' @return estimated exposure effect for every dive 
+#' @export
+GetExposureEff <- function(mod, pick) {
+  par <- mod$rep$par.random
+  if (pick == "dive") {
+    nms <- colnames(mod$sm$A_dive)
+    subpar <- par[names(par) == "s_dive"]
+    subpar <- subpar[grepl("^s\\(SSE\\)", nms)]
+    subA <- mod$sm$A_dive[, grepl("^s\\(SSE\\)", nms)]
+    eff <- subA %*% subpar 
+  } else {
+    nms <- colnames(mod$sm$A_surf)
+    subpar <- par[names(par) == "s_surf"]
+    subpar <- subpar[grepl("^s\\(SSE\\)", nms)]
+    subA <- mod$sm$A_surf[, grepl("^s\\(SSE\\)", nms)]
+    eff <- subA %*% subpar 
+  }
+  return(eff)
+}
+
+
