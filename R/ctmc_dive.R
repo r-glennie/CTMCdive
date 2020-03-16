@@ -699,14 +699,14 @@ GetExposureEff <- function(mod, pick) {
   if (pick == "dive") {
     nms <- colnames(mod$sm$A_dive)
     subpar <- par[names(par) == "s_dive"]
-    subpar <- subpar[grepl("^s\\(SSE\\)", nms)]
-    subA <- mod$sm$A_dive[, grepl("^s\\(SSE\\)", nms)]
+    subpar <- subpar[grepl("^s\\(SS\\)", nms)]
+    subA <- mod$sm$A_dive[, grepl("^s\\(SS\\)", nms)]
     eff <- subA %*% subpar 
   } else {
     nms <- colnames(mod$sm$A_surf)
     subpar <- par[names(par) == "s_surf"]
-    subpar <- subpar[grepl("^s\\(SSE\\)", nms)]
-    subA <- mod$sm$A_surf[, grepl("^s\\(SSE\\)", nms)]
+    subpar <- subpar[grepl("^s\\(SS\\)", nms)]
+    subA <- mod$sm$A_surf[, grepl("^s\\(SS\\)", nms)]
     eff <- subA %*% subpar 
   }
   return(eff)
