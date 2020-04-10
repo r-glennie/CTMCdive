@@ -4,13 +4,15 @@
 \alias{GetExposureEff}
 \title{Estimate exposure effect for dive and surface}
 \usage{
-GetExposureEff(mod, predgrid, nsims = 1000)
+GetExposureEff(mod, predgrid, exp = "exp", val = NULL, nsims = 1000)
 }
 \arguments{
 \item{mod}{fitted CTMC model}
 
 \item{predgrid}{data frame with same columns as data but with a user-defined time grid to estimate the effect over 
-must have a column named  "exp" which is 1 during exposure period and zero otherwise}
+must have a column which is 1 when exposure is one and zero otherwise}
+
+\item{exp}{name of exposure indicator}
 
 \item{nsims}{number of posterior simulations, default is 1000}
 }
