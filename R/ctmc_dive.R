@@ -20,6 +20,7 @@ MakeMatrices <- function(forms, dat, min_dwell, nint = 10000) {
   ## dive model
   # GAM setup
   gam_dive <- gam(forms[["dive"]], data = dat, method = "REML")
+  res$gam_dive <- gam_dive
   # accumulate smoothing matrix, block diagonal
   if(length(gam_dive$smooth) > 0){
     S_dive_list <- list()
@@ -48,6 +49,7 @@ MakeMatrices <- function(forms, dat, min_dwell, nint = 10000) {
   ## surface model
   # GAM setup
   gam_surface <- gam(forms[["surface"]], data = dat, method = "REML")
+  res$gam_surface <- gam_surface 
   # accumulate smoothing matrix, block diagonal
   if(length(gam_surface$smooth) > 0){
     S_surface_list <- list()
@@ -117,7 +119,7 @@ MakeMatrices <- function(forms, dat, min_dwell, nint = 10000) {
 
   # weibull for integration grid 
   t_dive <- c(-1e-10, dat$time + dat$dive, max(dat$time + dat$surface + dat$dive))
-  cut_dive <- as.numeric(cut(ints, breaks = t_dive))
+  cut_dive <- as.numeric(cut(ints, breaks = unique(t_dive)))
   dt_dive <- ints - t_dive[cut_dive]
   res$W_grid_dive <- log(dt_dive + 1e-10)
   
@@ -127,7 +129,7 @@ MakeMatrices <- function(forms, dat, min_dwell, nint = 10000) {
 
   # weibull for integration grid 
   t_surf <- c(-1e-10, dat$time, max(dat$time + dat$surface + dat$dive))
-  cut_surf <- as.numeric(cut(ints, breaks = t_surf))
+  cut_surf <- as.numeric(cut(ints, breaks = unique(t_surf)))
   dt_surf <- ints - t_surf[cut_surf] 
   res$W_grid_surf <- log(dt_surf + 1e-10)
   
@@ -687,29 +689,98 @@ EDF_f <- function(X, S, lambda, Sn){
   sum(diag(F))
 }
 
-#' Temporary Exposure effect extractor 
+
+#' Estimate exposure effect for dive and surface 
 #'
-#' @param mod model you want exposure effect for 
-#' @param pick whether to pick effect out of dive or surface model 
+#' @param mod fitted CTMC model 
+#' @param predgrid data frame with same columns as data but with a user-defined time grid to estimate the effect over 
+#'                 must have a column named  "exp" which is 1 during exposure period and zero otherwise 
+#' @param nsims number of posterior simulations, default is 1000
 #'
-#' @return estimated exposure effect for every dive 
+#' @return list with dive and surface elements which each contain the mean exposure effect and the credible interval bands
 #' @export
-GetExposureEff <- function(mod, pick) {
-  par <- mod$rep$par.random
-  if (pick == "dive") {
-    nms <- colnames(mod$sm$A_dive)
-    subpar <- par[names(par) == "s_dive"]
-    subpar <- subpar[grepl("^s\\(SS", nms)]
-    subA <- mod$sm$A_dive[, grepl("^s\\(SS", nms)]
-    eff <- subA %*% subpar 
-  } else {
-    nms <- colnames(mod$sm$A_surf)
-    subpar <- par[names(par) == "s_surf"]
-    subpar <- subpar[grepl("^s\\(SS", nms)]
-    subA <- mod$sm$A_surf[, grepl("^s\\(SS", nms)]
-    eff <- subA %*% subpar 
+GetExposureEff <- function(mod, predgrid, nsims = 1000) {
+  rand <- mod$rep$par.random
+  fixed <- mod$rep$par.fixed
+  basedat <- predgrid 
+  basedat$exp <- 0 
+  Xdive <- predict(mod$sm$gam_dive, predgrid, type = "lpmatrix")
+  Xdivebase <- predict(mod$sm$gam_dive, basedat, type = "lpmatrix")
+  Xsurf <- predict(mod$sm$gam_surf, predgrid, type = "lpmatrix")
+  Xbasesurf <- predict(mod$sm$gam_surf, basedat, type = "lpmatrix")
+  V <- solve(mod$rep$jointPrecision)
+  betas <- rmvn(nsims, c(mod$rep$par.fixed, mod$rep$par.random), V)
+  betadive <- t(betas[, c(names(fixed) == "par_dive", names(rand) == "s_dive")])
+  betasurf <- t(betas[, c(names(fixed) == "par_surf", names(rand) == "s_surf")])
+  simdive <- exp(Xdive %*% betadive)
+  simbasedive <- exp(Xdivebase %*% betadive)
+  simsurf <- exp(Xsurf %*% betasurf)
+  simbasesurf <- exp(Xbasesurf %*% betasurf)
+  simdiveexp <- simdive - simbasedive
+  simsurfexp <- simsurf - simbasesurf
+  simdiveexp <- simdiveexp[predgrid$exp == 1,]
+  simsurfexp <- simsurfexp[predgrid$exp == 1,]
+  dive <- surf <- NULL
+  dive$mean <- rowMeans(simdiveexp)
+  dive$ci <- apply(simdiveexp, 1, quantile, prob = c(0.025, 0.975))
+  surf$mean <- rowMeans(simsurfexp)
+  surf$ci <- apply(simsurfexp, 1, quantile, prob = c(0.025, 0.975))
+  res <- list(dive = dive, surf = surf, predgrid = predgrid)
+  class(res) <- "ExposureEffect"
+  return(res) 
+}
+
+#' Expand covariates across a time grid 
+#'
+#' @param dat data frame with covariates in columns and time column
+#' @param tgrid a vector with new time grid
+#'
+#' @return a expanded data frame where covariates are copied from nearest time point to grid point 
+#' @export
+ExpandCovs <- function(dat, tgrid) {
+  subdat <- dat[dat$time > min(tgrid) & dat$time <= max(tgrid),]
+  freq <- as.numeric(table(sapply(tgrid, FUN = function(x) which.min(abs(x - subdat$time)))))
+  predgrid <- subdat[rep(seq(nrow(subdat)), freq), ] 
+  predgrid$time <- tgrid
+  return(predgrid)
+}
+
+#' Plot exposure effect 
+#'
+#' @param expeff exposure effect estimates from GetExposureEff function
+#' @param pick if "both" (default) then for dive and surface, otherwise for "dive" or "surface" 
+#'
+#' @return plots of exposure effect with vertical line at point where no evidence exposure has effect from baseline
+#' @export
+plot.ExposureEffect <- function(expeff, pick = "all") {
+  if (pick == "dive" | pick == "all") {
+    plot(expeff$predgrid$time, expeff$dive$mean, type = "l", ylim = range(expeff$dive$ci), xlab = "Time", ylab = "Dive intensity exposure effect")
+    lines(expeff$predgrid$time, expeff$dive$ci[1,], lty = "dashed")
+    lines(expeff$predgrid$time, expeff$dive$ci[2,], lty = "dashed")
+    abline(h = 0, col = "red", lty = "dotted")
+    wh <- which(expeff$dive$ci[1,] < 0 & expeff$dive$ci[2,] > 0)
+    if (length(wh) > 0) {
+      wh <- min(wh)
+      abline(v = expeff$predgrid$time[wh], col = "blue", lty = "dotted")
+      cat("Return to baseline for dive: ", expeff$predgrid$time[wh] - min(expeff$predgrid$time[expeff$predgrid$exp == 1]), "\n")
+    } else {
+      cat("No estimated return to baseline for dive\n")
+    }
+  } 
+  if (pick == "surf" | pick == "all") {
+    plot(expeff$predgrid$time, expeff$surf$mean, type = "l", ylim = range(expeff$surf$ci), xlab = "Time", ylab = "Surface intensity exposure effect")
+    lines(expeff$predgrid$time, expeff$surf$ci[1,], lty = "dashed")
+    lines(expeff$predgrid$time, expeff$surf$ci[2,], lty = "dashed")
+    abline(h = 0, col = "red", lty = "dotted")
+    wh <- which(expeff$surf$ci[1,] < 0 & expeff$surf$ci[2,] > 0)
+    if (length(wh) > 0) {
+      wh <- min(wh)
+      abline(v = expeff$predgrid$time[wh], col = "blue", lty = "dotted")
+      cat("Return to baseline for surface: ", expeff$predgrid$time[wh] - min(expeff$predgrid$time[expeff$predgrid$exp == 1]), "\n")
+    } else {
+      cat("No estimated return to baseline for surface\n")
+    }
   }
-  return(eff)
 }
 
 
