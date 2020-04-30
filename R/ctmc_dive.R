@@ -666,10 +666,15 @@ AIC.CTMCdive <- function(object, ..., k=2){
 
 }
 
-
-# EDF for smooth terms = trace(F)
-# F = (Xt X + sp*S)^-1 Xt X
-# Wood 2017 p 212
+#' EDF for smooth terms = trace(F)
+#'
+#' @param X design matrix 
+#' @param S smoothing matrix 
+#' @param lambda smoothing parameter 
+#' @param Sn dimension of smoothing matrix 
+#'
+#' @return trace of F = (Xt X + sp*S)^-1 Xt X
+#' @importFrom Matrix t solve diag 
 EDF_f <- function(X, S, lambda, Sn){
 
   if(length(lambda)==0){
