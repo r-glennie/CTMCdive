@@ -4,7 +4,7 @@
 \alias{MakeMatrices}
 \title{Compute matrices required to fit the model}
 \usage{
-MakeMatrices(forms, dat, min_dwell, nint = 10000)
+MakeMatrices(forms, dat, min_dwell, series = FALSE, nint = 10000)
 }
 \arguments{
 \item{forms}{formulae}
@@ -12,6 +12,8 @@ MakeMatrices(forms, dat, min_dwell, nint = 10000)
 \item{dat}{data frame (see fitCTMCdive)}
 
 \item{min_dwell}{start point for the integrals}
+
+\item{series}{TRUE if data is a series rather than dive-by-dive}
 
 \item{nint}{number of integration points}
 }

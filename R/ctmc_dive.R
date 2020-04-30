@@ -5,6 +5,7 @@
 #' @param forms formulae
 #' @param dat data frame (see fitCTMCdive)
 #' @param min_dwell start point for the integrals
+#' @param series TRUE if data is a series rather than dive-by-dive
 #' @param nint number of integration points
 #'
 #' @return list of matrices required to fit the model
@@ -12,7 +13,7 @@
 #' @importFrom mgcv gam predict.gam
 #' @importFrom methods as
 #' @importFrom Matrix bdiag
-MakeMatrices <- function(forms, dat, min_dwell, nint = 10000) {
+MakeMatrices <- function(forms, dat, min_dwell, series = FALSE, nint = 10000) {
 
   # results list
   res <- list()
@@ -37,14 +38,21 @@ MakeMatrices <- function(forms, dat, min_dwell, nint = 10000) {
     res$S_dive <- bdiag(S_dive_list)
   }
 
+  # reduce data if series to dive-by-dive
+  if (series) {
+    divedat <- dat[dat$start == 1,] 
+  } else {
+    divedat <- dat
+  }
+  
   ## build design matrix
-  mm <- predict(gam_dive, newdata = dat, type = "lpmatrix")
+  mm <- predict(gam_dive, newdata = divedat, type = "lpmatrix")
   # fixed effects design matrix
   res$Xs_dive <- mm[, 1:gam_dive$nsdf, drop=FALSE]
   # smooth design matrix
   res$A_dive <- mm[, -c(1:gam_dive$nsdf), drop=FALSE]
   # weibull design matrix 
-  res$W_dive <- matrix(c(0, log(dat$surface[-1] + 1e-10)), nr = nrow(dat), nc = 1)
+  res$W_dive <- matrix(c(0, log(divedat$surface[-1] + 1e-10)), nr = nrow(divedat), nc = 1)
   
   ## surface model
   # GAM setup
@@ -65,8 +73,12 @@ MakeMatrices <- function(forms, dat, min_dwell, nint = 10000) {
     # build a block diagonal matrix
     res$S_surface <- bdiag(S_surface_list)
   }
-  surfdat <- dat
-  surfdat$time <- dat$time + dat$dive
+  if (series) {
+    surfdat <- dat[dat$start == 1,]
+  } else {
+    surfdat <- dat
+  }
+  surfdat$time <- surfdat$time + surfdat$dive
 
   ## build design matrix
   mm <- predict(gam_surface, newdata = surfdat, type = "lpmatrix")
@@ -75,12 +87,12 @@ MakeMatrices <- function(forms, dat, min_dwell, nint = 10000) {
   # smooth design matrix
   res$A_surf <- mm[, -c(1:gam_surface$nsdf), drop=FALSE]
   # weibull design matrix
-  res$W_surf <- matrix(log(dat$dive + 1e-10), nr = nrow(dat), nc = 1)
+  res$W_surf <- matrix(log(surfdat$dive + 1e-10), nr = nrow(surfdat), nc = 1)
   
   # construct prediction grid
-  n <- nrow(dat)
-  ints <- seq(dat$time[1],
-              dat$time[n] + dat$dive[n] + dat$surface[n],
+  n <- nrow(divedat)
+  ints <- seq(divedat$time[1],
+              divedat$time[n] + divedat$dive[n] + divedat$surface[n],
               length = nint)
   # spacing on prediction grid
   dt <- mean(diff(ints))
@@ -118,9 +130,10 @@ MakeMatrices <- function(forms, dat, min_dwell, nint = 10000) {
   res$A_grid_dive <- pred_mat_dive[, -c(1:gam_dive$nsdf), drop=FALSE]
 
   # weibull for integration grid 
-  t_dive <- c(-1e-10, dat$time + dat$dive, max(dat$time + dat$surface + dat$dive))
-  cut_dive <- as.numeric(cut(ints, breaks = unique(t_dive)))
-  dt_dive <- ints - t_dive[cut_dive]
+  t_dive <- c(-1e-10, divedat$time + divedat$dive, max(divedat$time + divedat$surface + divedat$dive))
+  br <- sort(unique(t_dive))
+  cut_dive <- as.numeric(cut(ints, breaks = br))
+  dt_dive <- ints - br[cut_dive]
   res$W_grid_dive <- log(dt_dive + 1e-10)
   
   pred_mat_surface <- pred_mat_maker(gam_surface, dat, ints)
@@ -128,21 +141,22 @@ MakeMatrices <- function(forms, dat, min_dwell, nint = 10000) {
   res$A_grid_surface <- pred_mat_surface[, -c(1:gam_surface$nsdf), drop=FALSE]
 
   # weibull for integration grid 
-  t_surf <- c(-1e-10, dat$time, max(dat$time + dat$surface + dat$dive))
-  cut_surf <- as.numeric(cut(ints, breaks = unique(t_surf)))
-  dt_surf <- ints - t_surf[cut_surf] 
+  t_surf <- c(-1e-10, divedat$time, max(divedat$time + divedat$surface + divedat$dive))
+  br <- sort(unique(t_surf))
+  cut_surf <- as.numeric(cut(ints, breaks = br))
+  dt_surf <- ints - br[cut_surf] 
   res$W_grid_surf <- log(dt_surf + 1e-10)
   
   # get integration matrices
   indD <- indS <- matrix(0, nrow = n, ncol = nint)
-  dive_end <- dat$time + dat$dive
+  dive_end <- divedat$time + divedat$dive
   for (i in 1:nint) {
-    wh <- which(ints[i] <= dat$time[-1] &
+    wh <- which(ints[i] <= divedat$time[-1] &
                 ints[i] >= (dive_end[-n]+min_dwell$surface))
     if (length(wh) != 0) {
       indD[wh, i] <- 1
     }
-    wh <- which(ints[i] >= (dat$time+min_dwell$dive) & ints[i] <= dive_end)
+    wh <- which(ints[i] >= (divedat$time+min_dwell$dive) & ints[i] <= dive_end)
     if (length(wh) != 0) {
       indS[wh, i] <- 1
     }
@@ -162,7 +176,8 @@ MakeMatrices <- function(forms, dat, min_dwell, nint = 10000) {
 #' @param dat a \code{data.frame} with at least three columns named \code{dive} (dive durations), \code{surface} (surface durations), and \code{time} (start time of dive); all of these must be numeric.
 #' @param print if \code{TRUE}, useful output is printed
 #' @param min_dwell Minimum dwell time in a state. Useful if, for example, dives are only categorised as such if they are longer than a certain interval. Named list, needs to be in the same units as \code{time}, \code{surface} and \code{dive}.
-#'
+#' @param series if TRUE then series data, otherwise dive-by-dive data 
+#' 
 #' @return a CTMCdive model object: a list of the estimated results (\code{res}), variance matrix (\code{var}), fitted model returned from \code{optim} (\code{mod}), output from \code{sdreport} (\code{res}), design matrices (\code{Xs}), smoothing data (\code{sm}), formulae (\code{forms{), indices that divide par between dive and surface parameters (\code{len}), data (\code{dat}), indicators for smooths used (\code{lambda}), and model type (\code{model}).
 #' @export
 #' @importFrom stats delete.response model.matrix optim
@@ -170,8 +185,12 @@ MakeMatrices <- function(forms, dat, min_dwell, nint = 10000) {
 #' @importFrom TMB MakeADFun sdreport
 #' @useDynLib ctmc_dive
 FitCTMCdive <- function(forms, dat, print = TRUE,
-                        min_dwell=list(dive=0, surface=0)) {
+                        min_dwell=list(dive=0, surface=0), 
+                        series = FALSE) {
 
+  ## Check series
+  if ("start" %in% colnames(dat) & !series) warning("Did you mean to fit a series model? Series = FALSE but dat has a start column.")
+  
   ## Make design matrices and parameter vector
   if (print) cat("Computing design matrices.......")
 
@@ -182,7 +201,7 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
   # smoothing data
   random <- NULL
   map <- list()
-  sm <- MakeMatrices(forms, dat, min_dwell)
+  sm <- MakeMatrices(forms, dat, min_dwell = min_dwell, series = series)
 
   len <- c(ncol(sm$Xs_dive), ncol(sm$Xs_surface))
   names(len) <- c("dive", "surface")
