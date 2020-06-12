@@ -11,7 +11,7 @@ dt <- 0.5
 t <- seq(0, T, by = dt)
 n <- length(t)
 
-exposure <- TRUE
+exposure <- FALSE
 if (exposure) {
   exp <- rep(0, n)
   exp[t > 5000 & t < 6000] <- 1 
@@ -90,6 +90,7 @@ freq <- as.numeric(table(sapply(tgrid, FUN = function(x) which.min(abs(x - subda
 predgrid <- subdat[rep(seq(nrow(subdat)), freq), ] 
 predgrid$time <- tgrid
 predgrid$exp <- 1 
+
 predgrid <- ExpandCovs(dat, tgrid)
 expeff <- GetExposureEff(mod, predgrid)
 plot(expeff)
