@@ -563,13 +563,19 @@ plot.CTMCdive <- function(x, quant = 1, pick = NULL, pred = NULL, xlim = NULL, s
     # get uncertainty
     ss <- get_samples(x, n_samp)
     # function to apply
-    afn <- function(pars, m){
-      m$rep$par.fixed <- pars[1:length(m$rep$par.fixed)]
-      m$rep$par.random <- pars[-(1:length(m$rep$par.fixed))]
+    afn <- function(pars, m, nms.fixed, nms.random){
+      lamnm <- grepl("^log_lambda", nms.fixed)
+      len <- length(m$rep$par.fixed) - sum(lamnm)
+      m$rep$par.fixed[!lamnm] <- pars[1:len]
+      m$rep$par.random <- pars[-(1:len)]
+      names(m$rep$par.fixed) <- nms.fixed
+      names(m$rep$par.random) <- nms.random
       pp <- predict(m)
       return(c(pp$surface, pp$dive))
     }
-    samples <- apply(ss, 1, afn, m=x)
+    nms.fixed <- names(x$rep$par.fixed)
+    nms.random <- names(x$rep$par.random)
+    samples <- apply(ss, 1, afn, m=x, nms.fixed = nms.fixed, nms.random = nms.random)
     surface_samples <- samples[1:length(time), ]
     dive_samples <- samples[-(1:length(time)), ]
   }
@@ -581,7 +587,7 @@ plot.CTMCdive <- function(x, quant = 1, pick = NULL, pred = NULL, xlim = NULL, s
     if(se){
       surface_upper <- apply(surface_samples, 1, quantile, probs=0.975)
       surface_lower <- apply(surface_samples, 1, quantile, probs=0.025)
-      polygon(c(time, rev(time)), c(surface_upper, surface_lower), col="grey80", border=NA)
+      polygon(c(time, rev(time)), c(surface_lower, rev(surface_upper)), col="grey80", border=NA)
     }
     points(time, dat$surface, col = "grey60", pch=pch, cex=cex)
     lines(time, pred$surface)
@@ -592,7 +598,7 @@ plot.CTMCdive <- function(x, quant = 1, pick = NULL, pred = NULL, xlim = NULL, s
     if(se){
       dive_upper <- apply(dive_samples, 1, quantile, probs=0.975)
       dive_lower <- apply(dive_samples, 1, quantile, probs=0.025)
-      polygon(c(time, rev(time)), c(dive_upper, dive_lower), col="grey80", border=NA)
+      polygon(c(time, rev(time)), c(dive_lower, rev(dive_upper)), col="grey80", border=NA)
     }
     points(time, dat$dive, col = "grey60", pch=pch, cex=cex)
     lines(time, pred$dive)
@@ -631,7 +637,7 @@ get_samples <- function(mod, n=200){
 #' @note This does not account for degrees of freedom reduction with smooths (i.e if lambda > 0)
 #' @export
 logLik.CTMCdive <- function(x, ...) {
-  val <- -x$mod$xive
+  val <- -x$mod$objective
   npar <- length(x$mod$par)
   llk <- val
   attributes(llk)$df <- npar
