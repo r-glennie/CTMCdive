@@ -544,7 +544,7 @@ predict.CTMCdive <- function(x, newdata = NULL, ...) {
 #' @export
 #' @importFrom graphics lines par plot
 plot.CTMCdive <- function(x, quant = 1, pick = NULL, pred = NULL, xlim = NULL, se=FALSE, n_samp=200, pch=19, cex=0.6, ...) {
-  if (is.null(pick)) {
+  if (is.null(pick) | pick == "all") {
     par(mfrow=c(2, 1))
     on.exit(par(mfrow=c(1,1)))
     pick <- "all"
@@ -789,6 +789,11 @@ ExpandCovs <- function(dat, tgrid) {
 #' @return plots of exposure effect with vertical line at point where no evidence exposure has effect from baseline
 #' @export
 plot.ExposureEffect <- function(expeff, pick = "all") {
+  if (is.null(pick) | pick == "all") {
+    par(mfrow=c(2, 1))
+    on.exit(par(mfrow=c(1,1)))
+    pick <- "all"
+  }
   if (pick == "dive" | pick == "all") {
     sig <- ifelse(expeff$dive$mean > 0, expeff$dive$ci[1,] > 0, expeff$dive$ci[2,] < 0)
     cols <- ifelse(sig, "blue", "grey80")
