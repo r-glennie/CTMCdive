@@ -18,7 +18,7 @@
 )
 }
 \arguments{
-\item{x}{fitted CTMCdive model object}
+\item{x}{fitted CTMCdive model x}
 
 \item{quant}{the quantile to plot the observed data up to, for example if set to 0.95 then only the durations up to the 95\% quantile are plotted (prevents outliers dominating the plot)}
 

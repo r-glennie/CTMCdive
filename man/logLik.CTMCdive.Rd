@@ -4,10 +4,10 @@
 \alias{logLik.CTMCdive}
 \title{Returns log-likelihood with degrees of freedom}
 \usage{
-\method{logLik}{CTMCdive}(object, ...)
+\method{logLik}{CTMCdive}(x, ...)
 }
 \arguments{
-\item{object}{fitted CTMCdive object}
+\item{x}{fitted CTMCdive x}
 
 \item{\dots}{unused (for S3 compatability)}
 }

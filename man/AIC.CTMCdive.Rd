@@ -4,12 +4,12 @@
 \alias{AIC.CTMCdive}
 \title{Akaike's An Information Criterion for CTMCdive models}
 \usage{
-\method{AIC}{CTMCdive}(object, ..., k = 2)
+\method{AIC}{CTMCdive}(x, ..., k = 2)
 }
 \arguments{
-\item{object}{a fitted detection function object}
+\item{x}{a fitted detection function x}
 
-\item{\dots}{optionally more fitted model objects.}
+\item{\dots}{optionally more fitted model xs.}
 
 \item{k}{penalty per parameter to be used; the default \code{k = 2} is the "classical" AIC}
 }

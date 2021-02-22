@@ -7,7 +7,7 @@
 get_samples(mod, n = 200)
 }
 \arguments{
-\item{mod}{a fitted model object}
+\item{mod}{a fitted model x}
 
 \item{n}{number of samples to take}
 }
