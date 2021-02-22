@@ -506,11 +506,12 @@ predict.CTMCdive <- function(x, newdata = NULL, ...) {
   exp_dive <- exp_surf <- rep(0, nrow(dat))
   r_dive <- r_surf <- rep(0, nrow(dat))
   for (i in 1:nrow(dat)) {
-    Ldive <- lambda_dive[ints > dat$time[i] + dat$dive[i]] + (kappa_dive - 1) * 
-      log(ints[ints > dat$time[i] + dat$dive[i]] - dat$time[i] - dat$dive[i])
+    nearest_int_time <- which.min((ints - dat$time[i])^2)
+    t <- ints[nearest_int_time]
+    Ldive <- lambda_dive[ints > t + dat$dive[i]] + (kappa_dive - 1) * 
+      log(ints[ints > t + dat$dive[i]] - t - dat$dive[i])
     Ldive <- cumsum(exp(Ldive))
-    Lsurf <- lambda_surf[ints > dat$time[i]] + (kappa_surf - 1) * 
-      log(ints[ints > dat$time[i]] - dat$time[i])
+    Lsurf <- lambda_surf[ints > t] + (kappa_surf - 1) * log(ints[ints > t] - t)
     Lsurf <- cumsum(exp(Lsurf))
     Sdive <- exp(-Ldive * dt)
     Ssurf <- exp(-Lsurf * dt)
@@ -518,11 +519,22 @@ predict.CTMCdive <- function(x, newdata = NULL, ...) {
     exp_dive[i] <- sum(Ssurf * dt)
     exp_surf[i] <- sum(Sdive * dt)
     # get dive p-value
-    r_dive[i] <- Ssurf[max(floor(dat$dive[i] / dt), 1)]
-    r_surf[i] <- Sdive[max(floor(dat$surface[i] / dt), 1)]
+    if (sum(ints > t) > 1) {
+      Ssurf_approx <- approxfun(c(0, ints[ints > t] - t), c(1, Ssurf))
+      r_dive[i] <- qnorm(Ssurf_approx(dat$dive[i]))
+    } 
+    if (sum(ints > t + dat$dive[i])) {
+      Sdive_approx <- approxfun(c(0, ints[ints > t + dat$dive[i]]) - t - dat$dive[i], c(1, Sdive))
+      r_surf[i] <- qnorm(Sdive_approx(dat$surface[i]))
+    }
   }
   # return predictions
-  res <- list(surface = exp_surf, dive = exp_dive, rdive = r_dive, rsurf = r_surf)
+  res <- list(surface = exp_surf, 
+              dive = exp_dive, 
+              diveI = exp(lambda_dive), 
+              surfI = exp(lambda_surf), 
+              rdive = r_dive, 
+              rsurf = r_surf)
   return(res)
 }
 
@@ -753,8 +765,8 @@ GetExposureEff <- function(mod, predgrid, exp = "exp", val = NULL, nsims = 1000)
   simbasedive <- exp(Xdivebase %*% betadive)
   simsurf <- exp(Xsurf %*% betasurf)
   simbasesurf <- exp(Xbasesurf %*% betasurf)
-  simdiveexp <- simdive - simbasedive
-  simsurfexp <- simsurf - simbasesurf
+  simdiveexp <- (simdive - simbasedive) / simbasedive
+  simsurfexp <- (simsurf - simbasesurf) / simbasesurf 
   simdiveexp <- simdiveexp[predgrid[exp][,1] == 1,]
   simsurfexp <- simsurfexp[predgrid[exp][,1] == 1,]
   dive <- surf <- NULL
@@ -762,6 +774,8 @@ GetExposureEff <- function(mod, predgrid, exp = "exp", val = NULL, nsims = 1000)
   dive$ci <- apply(simdiveexp, 1, quantile, prob = c(0.025, 0.975))
   surf$mean <- rowMeans(simsurfexp)
   surf$ci <- apply(simsurfexp, 1, quantile, prob = c(0.025, 0.975))
+  dive$sims <- simdiveexp
+  surf$sims <- simsurfexp
   res <- list(dive = dive, surf = surf, predgrid = predgrid, exp = exp)
   class(res) <- "ExposureEffect"
   return(res) 
