@@ -274,6 +274,8 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
   if (print) cat("Making AD fun.......")
   obj <- MakeADFun(tmb_dat, tmb_parameters, random = random, map = map,
                    hessian = TRUE, DLL = "ctmc_dive", silent=!print)
+  obj_full <- MakeADFun(tmb_dat, tmb_parameters, map = map,
+                        hessian = TRUE, DLL = "ctmc_dive", silent=!print)
   if(print) cat("done\n")
 
   # find the normalization for the GMRF (smooths)
@@ -298,6 +300,10 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
   est <- rep$par.fixed
   var <- rep$cov.fixed
   sds <- sqrt(diag(var))
+
+  ## Compute log-likelihood under full model
+  par_all <- c(est, rep$par.random)
+  llk_full <- -obj_full$fn(par_all)
   if(print) cat("done\n")
 
   # confidence intervals
@@ -338,14 +344,14 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
               var = var,
               mod = mod,
               rep = rep,
+              llk_full = llk_full,
               Xs_dive = sm$Xs_dive,
               Xs_surface = sm$Xs_surface,
               sm = sm,
               forms = forms,
               len = len,
               dat = dat, 
-              series = series
-             )
+              series = series)
   if(print) cat("done\n")
   class(ans) <- "CTMCdive"
   return(ans)
@@ -391,8 +397,7 @@ summary.CTMCdive <- function(x, ...) {
       Sn <- x$sm$S_dive_n[i]
       S <- x$sm$S_dive[starti:(starti+Sn-1),
                             starti:(starti+Sn-1), drop=FALSE]
-      X <- x$sm$A_dive[starti:(starti+Sn-1),
-                            starti:(starti+Sn-1), drop=FALSE]
+      X <- x$sm$A_dive[,starti:(starti+Sn-1), drop=FALSE]
 
       sdive[["k'"]][i] <- nrow(S)
       sdive$EDF[i] <- EDF_f(X, S, lambda[i], Sn)
@@ -428,8 +433,7 @@ summary.CTMCdive <- function(x, ...) {
       Sn <- x$sm$S_surface_n[i]
       S <- x$sm$S_surface[starti:(starti+Sn-1),
                                starti:(starti+Sn-1), drop=FALSE]
-      X <- x$sm$A_surf[starti:(starti+Sn-1),
-                            starti:(starti+Sn-1), drop=FALSE]
+      X <- x$sm$A_surf[,starti:(starti+Sn-1), drop=FALSE]
 
       ssurface[["k'"]][i] <- nrow(S)
       ssurface$EDF[i] <- EDF_f(X, S, lambda[i], Sn)
@@ -649,8 +653,12 @@ get_samples <- function(mod, n=200){
 #' @return logLik with df attribute
 #' @note This does not account for degrees of freedom reduction with smooths (i.e if lambda > 0)
 #' @export
-logLik.CTMCdive <- function(x, ...) {
-  val <- -x$mod$objective
+logLik.CTMCdive <- function(x, full = TRUE, ...) {
+  if (full) {
+    val <- x$llk_full 
+  } else {
+    val <- -x$mod$objective
+  }
   npar <- length(x$mod$par)
   llk <- val
   attributes(llk)$df <- npar
