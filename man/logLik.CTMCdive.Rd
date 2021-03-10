@@ -4,7 +4,7 @@
 \alias{logLik.CTMCdive}
 \title{Returns log-likelihood with degrees of freedom}
 \usage{
-\method{logLik}{CTMCdive}(x, ...)
+\method{logLik}{CTMCdive}(x, full = TRUE, ...)
 }
 \arguments{
 \item{x}{fitted CTMCdive x}

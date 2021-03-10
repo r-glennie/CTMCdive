@@ -9,7 +9,9 @@ FitCTMCdive(
   dat,
   print = TRUE,
   min_dwell = list(dive = 0, surface = 0),
-  series = FALSE
+  series = FALSE,
+  re = "none",
+  dt = NULL
 )
 }
 \arguments{
@@ -22,6 +24,10 @@ FitCTMCdive(
 \item{min_dwell}{Minimum dwell time in a state. Useful if, for example, dives are only categorised as such if they are longer than a certain interval. Named list, needs to be in the same units as \code{time}, \code{surface} and \code{dive}.}
 
 \item{series}{if TRUE then series data, otherwise dive-by-dive data}
+
+\item{dt}{set time-step in integration, otherwise set to total_time / 10000}
+
+\item{rf}{if TRUE then fit a discrete random effect on dive}
 }
 \value{
 

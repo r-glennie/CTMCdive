@@ -30,9 +30,13 @@ Type objective_function<Type>::operator() ()
   DATA_VECTOR(W_grid_surf); 
   DATA_SPARSE_MATRIX(indD); // integration points within surfacings
   DATA_SPARSE_MATRIX(indS); // integration point within dives
+  DATA_SPARSE_MATRIX(tindD); // integration points within surfacings
+  DATA_SPARSE_MATRIX(tindS); // integration point within dives
   DATA_SCALAR(dt); // time step in integration
   DATA_IVECTOR(S_dive_n); // sizes of sparse matrices
   DATA_IVECTOR(S_surface_n); // sizes of sparse matrices
+  DATA_INTEGER(include_smooths); // > 0 = include penalty in likelihood evaluation
+  DATA_INTEGER(re); // include discrete random effect on dive 
   
   PARAMETER_VECTOR(par_dive); // dive parameters
   PARAMETER_VECTOR(par_surf); // surface parameters
@@ -40,40 +44,67 @@ Type objective_function<Type>::operator() ()
   PARAMETER(log_kappa_surf); 
   PARAMETER_VECTOR(log_lambda_dive); // dive log smoothing parameter
   PARAMETER_VECTOR(log_lambda_surf); // surface log smoothing parameter
+  PARAMETER_VECTOR(log_rf_sd); // standard deviations for discrete random effects 
   PARAMETER_VECTOR(s_dive); // dive random effects
   PARAMETER_VECTOR(s_surf); // surface random effects
+  PARAMETER_VECTOR(rf_dive); // discrete random effect for dive 
+  PARAMETER_VECTOR(rf_surf); // discrete random effect for surfacing 
   
   vector<Type> lambda_dive = exp(log_lambda_dive); // dive smoothing parameter
   vector<Type> lambda_surf = exp(log_lambda_surf); // surface smoothing parameter
   Type kappa_dive = exp(log_kappa_dive); 
   Type kappa_surf = exp(log_kappa_surf); 
+  vector<Type> rf_sd = exp(log_rf_sd); 
   
   // Negative log-likelihood
   Type nll = 0;
   
   // add smoothing penalties, need to do this wonky bit to unblock S in each case
   // data setup
-  int S_start = 0;
-  if (S_dive_n(0) > 0.5) {
-    // dive bit
-    for(int i = 0; i < S_dive_n.size(); i++) {
-      int Sn = S_dive_n(i);
-      SparseMatrix<Type> this_S = S_dive.block(S_start, S_start, Sn, Sn);
-      vector<Type> beta_s = s_dive.segment(S_start, Sn);
-      nll -= Type(0.5) * Sn * log_lambda_dive(i) - 0.5 * lambda_dive(i) * GMRF(this_S, false).Quadform(beta_s);
-      S_start += Sn;
+  if (include_smooths > 0) {
+    int S_start = 0;
+    if (S_dive_n(0) > 0.5) {
+      // dive bit
+      for(int i = 0; i < S_dive_n.size(); i++) {
+        int Sn = S_dive_n(i);
+        SparseMatrix<Type> this_S = S_dive.block(S_start, S_start, Sn, Sn);
+        vector<Type> beta_s = s_dive.segment(S_start, Sn);
+        nll -= Type(0.5) * Sn * log_lambda_dive(i) - 0.5 * lambda_dive(i) * GMRF(this_S, false).Quadform(beta_s);
+        S_start += Sn;
+      }
+    }
+    
+    if (S_surface_n(0) > 0.5) {
+      // surface bit
+      S_start = 0;
+      for(int i = 0; i < S_surface_n.size(); i++) {
+          int Sn = S_surface_n(i);
+          SparseMatrix<Type> this_S = S_surface.block(S_start, S_start, Sn, Sn);
+          vector<Type> beta_s = s_surf.segment(S_start, Sn);
+          nll -= Type(0.5) * Sn * log_lambda_surf(i) - 0.5 * lambda_surf(i) * GMRF(this_S, false).Quadform(beta_s);
+          S_start += Sn;
+      }
     }
   }
   
-  if (S_surface_n(0) > 0.5) {
-    // surface bit
-    S_start = 0;
-    for(int i = 0; i < S_surface_n.size(); i++) {
-      int Sn = S_surface_n(i);
-      SparseMatrix<Type> this_S = S_surface.block(S_start, S_start, Sn, Sn);
-      vector<Type> beta_s = s_surf.segment(S_start, Sn);
-      nll -= Type(0.5) * Sn * log_lambda_surf(i) - 0.5 * lambda_surf(i) * GMRF(this_S, false).Quadform(beta_s);
-      S_start += Sn;
+  if (re > 0 & re < 1.5) {
+    // Discrete random effect penalty 
+    nll -= sum(dnorm(rf_dive, 0, rf_sd(0), true));
+    nll -= sum(dnorm(rf_surf, 0, rf_sd(1), true));
+  }
+  
+  if (re > 0 & re > 1.5) {
+    matrix<Type> V(2, 2); 
+    V(0,0) = rf_sd(0); 
+    V(1,1) = rf_sd(1); 
+    V(0,1) = log_rf_sd(2);
+    V(1,0) = log_rf_sd(2); 
+    density::MVNORM_t<Type> dmnorm(V);
+    vector<Type> x(2); 
+    for (int i = 0; i < rf_dive.size(); ++i) {
+      x(0) = rf_dive(i);
+      x(1) = rf_surf(i); 
+      nll += dmnorm(x); 
     }
   }
   
@@ -82,17 +113,17 @@ Type objective_function<Type>::operator() ()
   if (flag == 0) return nll;
   
   // calculate log intensities
-  vector<Type> le_dive = Xdive * par_dive; 
+  vector<Type> le_dive = Xdive * par_dive + rf_dive; 
   if (S_dive_n(0) > 0.5) le_dive += A_dive * s_dive;
   le_dive = kappa_dive * le_dive + (kappa_dive - 1) * W_dive; 
   le_dive = (le_dive.array() + log_kappa_dive).matrix(); 
-  vector<Type> le_surf  = Xsurf * par_surf; 
+  vector<Type> le_surf  = Xsurf * par_surf + rf_surf; 
   if (S_surface_n(0) > 0.5) le_surf += A_surf * s_surf;
   le_surf = kappa_surf * le_surf + (kappa_surf - 1) * W_surf; 
   le_surf = (le_surf.array() + log_kappa_surf).matrix(); 
   
   // Integral of dive intensity
-  vector<Type> int_dive = Xs_grid_dive * par_dive; 
+  vector<Type> int_dive = Xs_grid_dive * par_dive + tindD * rf_dive; 
   if (S_dive_n(0) > 0.5) int_dive += A_grid_dive * s_dive;
   int_dive = kappa_dive * int_dive + (kappa_dive - 1) * W_grid_dive; 
   int_dive = (int_dive.array() + log_kappa_dive).matrix(); 
@@ -103,7 +134,7 @@ Type objective_function<Type>::operator() ()
   subint_dive *= dt;
   
   // Integral of surface intensity
-  vector<Type> int_surf = Xs_grid_surface * par_surf; 
+  vector<Type> int_surf = Xs_grid_surface * par_surf + tindS * rf_surf; 
   if (S_surface_n(0) > 0.5) int_surf += A_grid_surface * s_surf;
   int_surf = kappa_surf * int_surf + (kappa_surf - 1) * W_grid_surf; 
   int_surf = (int_surf.array() + log_kappa_surf).matrix(); 
