@@ -14,7 +14,7 @@ T <- 60 * 24 * 7
 dt <- 1
 
 # simulate data
-dat <- simulateCTMC(dive_I, surf_I, T, dt)
+dat <- simulateCTMC2(dive_I, surf_I, T, dt)
 
 # plot data
 plot(dat$dive, pch = 19, xlab = "Time of Dive Start", ylab = "Dive Duration")
