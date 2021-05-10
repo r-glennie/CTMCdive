@@ -24,20 +24,19 @@ surf_I <- function(t) {
 divei <- dive_I(tgr)
 surfi <- surf_I(tgr)
 
-
 surf_dur <- function(t, divei, tgr, dt) {
   surv <- exp(-cumsum(divei[tgr >= t - 1e-10]) * dt)
   est_duration <- sum(surv) * dt
   return(est_duration)
 }
-
-surfdurs <- sapply(tgr, surf_dur, divei = divei, tgr = tgr, dt = dt)
-
 dive_dur <- function(t, surfi, tgr, dt) {
   surv <- exp(-cumsum(surfi[tgr >= t - 1e-10]) * dt)
   est_duration <- sum(surv) * dt
   return(est_duration)
 }
+surfdurs <- sapply(tgr, surf_dur, divei = divei, tgr = tgr, dt = dt)
+divedurs <- sapply(tgr, dive_dur, surfi = surfi, tgr = tgr, dt = dt)
+
 # plot truth 
 plot(tgr, dive_I(tgr), type = "l", lwd = 1.5, xlab = "Time", ylab = "Dive Intensity")
 plot(tgr, surf_I(tgr), type = "l", lwd = 1.5, xlab = "Time", ylab = "Surface Intensity")
@@ -88,3 +87,18 @@ plot(tgr, dive_I(tgr), type = "l", lwd = 1.5, xlab = "Time", ylab = "Dive Intens
 lines(mod$sm$ints, pred$diveI, lwd = 1.5, col = "firebrick")
 plot(tgr, surf_I(tgr), type = "l", lwd = 1.5, xlab = "Time", ylab = "Surface Intensity")
 lines(mod$sm$ints, pred$surfI, lwd = 1.5, col = "firebrick")
+
+# compare true and estimated mean durations 
+estD <- pred$dive
+trueD <- sapply(dat$time, dive_dur, surfi = surfi, tgr = tgr, dt = dt)
+plot(estD, trueD)
+abline(a = 0, b = 1)
+plot(dat$time, estD)
+lines(dat$time, trueD)
+
+estS <- pred$surface
+trueS <- sapply(dat$time + dat$dive, surf_dur, divei = divei, tgr = tgr, dt = dt)
+plot(estS, trueS)
+abline(a = 0, b = 1)
+plot(dat$time + dat$dive, estS)
+lines(dat$time + dat$dive, trueS)
