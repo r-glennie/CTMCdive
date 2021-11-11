@@ -97,33 +97,6 @@ MakeMatrices <- function(forms, dat, min_dwell, series = FALSE, nint = 10000) {
   # spacing on prediction grid
   dt <- mean(diff(ints))
 
-  # construct predictor matrix
-  pred_mat_maker <- function(model, dat, ints){
-    # storage
-    newdat <- data.frame(time=ints)
-
-    # what covars do we need?
-    covs <- as.character(attr(delete.response(terms(model)),
-                              "variables"))[-1]
-    covs <- covs[covs!="time"]
-    # as.factor shennanigans
-    covs <- gsub("as.factor\\(", "", covs)
-    covs <- gsub("\\)", "", covs)
-    # for these covars, do an interpolation
-    for(cc in covs){
-      if(is.factor(dat[[cc]])){
-        newdat[[cc]] <- approx(dat$time, dat[[cc]], ints, method="constant", rule=2)$y
-        newdat[[cc]] <- factor(newdat[[cc]],
-                                 1:length(unique(dat[[cc]])),
-                                 levels(dat[[cc]]))
-      }else{
-        newdat[[cc]] <- approx(dat$time, dat[[cc]], ints, method="linear", rule=2)$y
-      }
-    }
-    # build the Lp matrix!
-    predict(model, newdata = newdat, type = "lpmatrix")
-  }
-
   # do this for each part of the model
   pred_mat_dive <- pred_mat_maker(gam_dive, dat, ints)
   res$Xs_grid_dive <- pred_mat_dive[, 1:gam_dive$nsdf, drop=FALSE]
@@ -152,11 +125,11 @@ MakeMatrices <- function(forms, dat, min_dwell, series = FALSE, nint = 10000) {
   dive_end <- divedat$time + divedat$dive
   for (i in 1:nint) {
     wh <- which((ints[i] < divedat$time[-1] + 1e-10) &
-                (ints[i] > (dive_end[-n]+min_dwell$surface) - 1e-10))
+                (ints[i] > (dive_end[-n]+min_dwell$surface - 1e-10)))
     if (length(wh) != 0) {
       indD[wh, i] <- 1
     }
-    wh <- which(ints[i] > (divedat$time+min_dwell$dive-1e-10) & ints[i] < (dive_end + 1e-10))
+    wh <- which(ints[i] > (divedat$time+min_dwell$dive + 1e-10) & ints[i] < (dive_end - 1e-10))
     if (length(wh) != 0) {
       indS[wh, i] <- 1
     }
@@ -168,6 +141,40 @@ MakeMatrices <- function(forms, dat, min_dwell, series = FALSE, nint = 10000) {
   res$dt <- dt
 
   return(res)
+}
+
+#' construct predictor matrix
+#' @param model fitted gam model 
+#' @param dat dataframe
+#' @param time grid
+#' @return model matrix for predicting over time grid 
+pred_mat_maker <- function(model, dat, ints){
+  # storage
+  newdat <- data.frame(time=ints)
+  
+  # what covars do we need?
+  covs <- as.character(attr(delete.response(terms(model)),
+                            "variables"))[-1]
+  covs <- covs[covs!="time"]
+  # as.factor shennanigans
+  covs <- gsub("as.factor\\(", "", covs)
+  covs <- gsub("\\)", "", covs)
+  # for these covars, do an interpolation
+  for(cc in covs){
+    if(is.factor(dat[[cc]])){
+      newdat[[cc]] <- approx(dat$time, dat[[cc]], ints, method="constant", rule=2)$y
+      newdat[[cc]] <- factor(newdat[[cc]],
+                             1:length(levels(dat[[cc]])),
+                             levels(dat[[cc]]))
+    } else if (class(dat[[cc]]) == "custom") {
+      args <- c(list(ints), attributes(dat[[cc]])$args)
+      newdat[[cc]] <- do.call(attributes(dat[[cc]])$f, args)
+    } else{
+      newdat[[cc]] <- approx(dat$time, dat[[cc]], ints, method="linear", rule=2)$y
+    }
+  }
+  # build the Lp matrix!
+  predict(model, newdata = newdat, type = "lpmatrix")
 }
 
 #' Fits continuous-time Markov chain to dive and surface duration data
@@ -241,10 +248,13 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
                        s_dive = factor(NA)))
     tmb_parameters$s_dive <- 0
     tmb_parameters$log_lambda_dive <- 0 
-    sm$S_dive <- as(matrix(0, 1, 1), "sparseMatrix")
-    sm$S_dive_n <- 0 
-    sm$A_grid_dive <- matrix(1, ncol(sm$indD), 1)
+    S_dive <- as(matrix(0, 1, 1), "sparseMatrix")
+    S_dive_n <- 0 
+    A_grid_dive <- matrix(1, ncol(sm$indD), 1)
   } else {
+    S_dive <- sm$S_dive
+    S_dive_n <- sm$S_dive_n
+    A_grid_dive <- sm$A_grid_dive
     random <- c(random, "s_dive")
     tmb_parameters$s_dive <- rep(0, ncol(sm$S_dive))
   }
@@ -253,10 +263,13 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
                        s_surf = factor(NA)))
     tmb_parameters$s_surf <- 0
     tmb_parameters$log_lambda_surf <- 0 
-    sm$S_surface <- as(matrix(0, 1, 1), "sparseMatrix")
-    sm$S_surface_n <- 0
-    sm$A_grid_surface <- matrix(1, ncol(sm$indS), 2)
+    S_surface <- as(matrix(0, 1, 1), "sparseMatrix")
+    S_surface_n <- 0
+    A_grid_surface <- matrix(1, ncol(sm$indS), 1)
   } else {
+    S_surface <- sm$S_surface
+    S_surface_n <- sm$S_surface_n
+    A_grid_surface <- sm$A_grid_surface
     random <- c(random, "s_surf")
     tmb_parameters$s_surf <- rep(0, ncol(sm$S_surface))
   }
@@ -280,16 +293,16 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
   ## Setup TMB data list
   tmb_dat <- list(Xdive = sm$Xs_dive,
                   Xsurf = sm$Xs_surface,
-                  S_dive = sm$S_dive,
-                  S_dive_n = as.integer(sm$S_dive_n),
-                  S_surface = sm$S_surface,
-                  S_surface_n = as.integer(sm$S_surface_n),
+                  S_dive = S_dive,
+                  S_dive_n = as.integer(S_dive_n),
+                  S_surface = S_surface,
+                  S_surface_n = as.integer(S_surface_n),
                   include_smooths = 1, 
                   re = switch(re, none = -1, ind = 1, corr = 2), 
                   A_dive = sm$A_dive,
                   A_surf = sm$A_surf,
-                  A_grid_surface = sm$A_grid_surface,
-                  A_grid_dive = sm$A_grid_dive,
+                  A_grid_surface = A_grid_surface,
+                  A_grid_dive = A_grid_dive,
                   W_dive = sm$W_dive, 
                   W_surf = sm$W_surf, 
                   W_grid_surf = sm$W_grid_surf, 
@@ -519,6 +532,13 @@ predict.CTMCdive <- function(x, newdata = NULL, ...) {
   par_dive <- par[1:len[1]]
   par_surf <- par[(len[1] + 1):(len[1] + len[2])]
 
+  # correct data for tag 
+  if (x$series) {
+    dat <- x$dat[x$dat$start == 1,] 
+  } else {
+    dat <- x$dat
+  }
+  
   if (is.null(newdata)) {
     # linear predictors
     lambda_dive <- x$sm$Xs_grid_dive %*% par_dive
@@ -538,18 +558,15 @@ predict.CTMCdive <- function(x, newdata = NULL, ...) {
     kappa_surf <- exp(log_kappa_surf)
     lambda_dive <- kappa_dive * lambda_dive + log_kappa_dive
     lambda_surf <- kappa_surf * lambda_surf + log_kappa_surf
+    from <- 1 
+    to <- nrow(dat)
   } else {
     lambda_dive <- newdata$lambda_dive
     lambda_surf <- newdata$lambda_surf 
     kappa_dive <- newdata$kappa_dive
-    kappa_surf <- newdata$kappa_surf 
-  }
-
-  # correct data for tag 
-  if (x$series) {
-    dat <- x$dat[x$dat$start == 1,] 
-  } else {
-    dat <- x$dat
+    kappa_surf <- newdata$kappa_surf
+    from <- ifelse(is.null(newdata$from), 1, newdata$from)
+    to <- ifelse(is.null(newdata$to), nrow(dat), newdata$to)
   }
 
   # get expectations
@@ -557,7 +574,7 @@ predict.CTMCdive <- function(x, newdata = NULL, ...) {
   dt <- mean(diff(ints))
   exp_dive <- exp_surf <- rep(0, nrow(dat))
   r_dive <- r_surf <- rep(0, nrow(dat))
-  for (i in 1:nrow(dat)) {
+  for (i in from:to) {
     nearest_int_time <- which.min((ints - dat$time[i])^2)
     t <- ints[nearest_int_time]
     Ldive <- lambda_dive[ints > t + dat$dive[i]] + (kappa_dive - 1) * 
@@ -581,12 +598,12 @@ predict.CTMCdive <- function(x, newdata = NULL, ...) {
     }
   }
   # return predictions
-  res <- list(surface = exp_surf, 
-              dive = exp_dive, 
+  res <- list(surface = exp_surf[from:to], 
+              dive = exp_dive[from:to], 
               diveI = exp(lambda_dive), 
               surfI = exp(lambda_surf), 
-              rdive = r_dive, 
-              rsurf = r_surf)
+              rdive = r_dive[from:to], 
+              rsurf = r_surf[from:to])
   return(res)
 }
 
@@ -655,7 +672,7 @@ plot.CTMCdive <- function(x, quant = 1, pick = NULL, pred = NULL, xlim = NULL, s
       polygon(c(time, rev(time)), c(surface_lower, rev(surface_upper)), col="grey80", border=NA)
     }
     points(time, dat$surface, col = "grey60", pch=pch, cex=cex)
-    lines(time, pred$surface)
+    points(time, pred$surface, col = "firebrick")
   }
   if (pick == "all" | pick == "dive") {
     q <- quantile(dat$dive, prob = quant)
@@ -666,7 +683,7 @@ plot.CTMCdive <- function(x, quant = 1, pick = NULL, pred = NULL, xlim = NULL, s
       polygon(c(time, rev(time)), c(dive_lower, rev(dive_upper)), col="grey80", border=NA)
     }
     points(time, dat$dive, col = "grey60", pch=pch, cex=cex)
-    lines(time, pred$dive)
+    points(time, pred$dive, col = "steelblue")
   }
   invisible(list(mod = x, pred = pred))
 }
@@ -781,6 +798,55 @@ AIC.CTMCdive <- function(x, ..., k=2){
 
 }
 
+#' Akaike's An Information Criterion for CTMCdive models
+#'
+#' Calculate the AIC from a fitted model.
+#'
+#' @param x a fitted detection function x
+#' @param k penalty per parameter to be used; the default \code{k = 2} is the "classical" AIC
+#' @param \dots optionally more fitted model xs.
+#' @author David L Miller
+#' @export
+#' @importFrom stats logLik
+AIC0.CTMCdive <- function(x, ..., k=2){
+  
+  # get the models
+  models <- list(x, ...)
+  
+  # build the table
+  aics <- matrix(NA, nrow=length(models), ncol=2)
+  for(i in seq_along(models)){
+    this_mod <- models[[i]]
+    ll <- this_mod$llk_full
+    
+    # dive component
+    dive_lambda <- exp(this_mod$rep$par.fixed[grepl("^log_lambda_dive", names(this_mod$rep$par.fixed))])
+    dive_edf <- EDF_f(this_mod$sm$A_dive, this_mod$sm$S_dive,
+                      dive_lambda, this_mod$sm$S_dive_n)
+    # surface component
+    surface_lambda <- exp(this_mod$rep$par.fixed[grepl("^log_lambda_surf", names(this_mod$rep$par.fixed))])
+    surface_edf <- EDF_f(this_mod$sm$A_surf, this_mod$sm$S_surface,
+                         surface_lambda, this_mod$sm$S_surface_n)
+    # DF for fixed effects (not smoopars)
+    fixed_edf <- length(this_mod$rep$par.fixed) -
+      (length(dive_lambda) + length(surface_lambda))
+    # total
+    total_edf <- dive_edf + surface_edf + fixed_edf
+    
+    aics[i, 1] <- total_edf
+    aics[i, 2] <- -2*ll + k*aics[i, 1]
+  }
+  # make it a data.frame
+  aics <- as.data.frame(aics)
+  names(aics) <- c("df", "AIC")
+  # add row names
+  call <- match.call(expand.dots=TRUE)
+  rownames(aics) <- as.character(call)[-1]
+  
+  return(aics)
+  
+}
+
 #' EDF for smooth terms = trace(F)
 #'
 #' @param X design matrix 
@@ -810,7 +876,7 @@ EDF_f <- function(X, S, lambda, Sn){
 }
 
 
-#' Estimate exposure effect for dive and surface 
+#' Estimate exposure effect for dive and surface intensity 
 #'
 #' @param mod fitted CTMC model 
 #' @param predgrid data frame with same columns as data but with a user-defined time grid to estimate the effect over 
@@ -822,7 +888,7 @@ EDF_f <- function(X, S, lambda, Sn){
 #' @return list with dive and surface elements which each contain the mean exposure effect and the credible interval bands
 #' @importFrom Matrix solve t rowMeans
 #' @export
-GetExposureEff <- function(mod, predgrid, basedat, nsims = 1000) {
+GetExposureEffonIntensity <- function(mod, predgrid, basedat, nsims = 1000) {
   rand <- mod$rep$par.random
   fixed <- mod$rep$par.fixed
   Xdive <- predict(mod$sm$gam_dive, predgrid, type = "lpmatrix")
@@ -845,10 +911,98 @@ GetExposureEff <- function(mod, predgrid, basedat, nsims = 1000) {
   surf$ci <- apply(simsurfexp, 1, quantile, prob = c(0.025, 0.975))
   dive$sims <- simdiveexp
   surf$sims <- simsurfexp
-  res <- list(dive = dive, surf = surf, predgrid = predgrid)
+  res <- list(dive = dive, surf = surf, time = dat$time[keep])
+  class(res) <- "ExposureEffectIntensity"
+  return(res) 
+}
+
+#' Get exposure effect on predicted durations 
+#'
+#' @param mod fitted CTMCdive model
+#' @param exp_var name of variable(s) non-zero when exposure occurs 
+#' @param nsims number of posterior simulations 
+#'
+#' @return simulations of difference between exposure and baseline models 
+#' @export
+GetExposureEff <- function(mod, exp_var = "exp", base_val = 0, exp_val = NULL, nsims = 200) {
+  # get parameters 
+  rand <- mod$rep$par.random
+  fixed <- mod$rep$par.fixed
+  # create baseline data 
+  dat <- mod$dat
+  basedat <- dat
+  basedat[[exp_var]] <- base_val 
+  # create design matrices 
+  basedive <- pred_mat_maker(model = mod$sm$gam_dive, dat = basedat, ints = mod$sm$ints)
+  basesurf <- pred_mat_maker(model = mod$sm$gam_surface, dat = basedat, ints = mod$sm$ints)
+  mdive <- cbind(mod$sm$Xs_grid_dive, mod$sm$A_grid_dive)
+  msurf <- cbind(mod$sm$Xs_grid_surface, mod$sm$A_grid_surface)
+  # get parameters and their uncertainty 
+  beta <- c(mod$rep$par.fixed, mod$rep$par.random)
+  nms <- names(beta)
+  V <- solve(mod$rep$jointPrecision)
+  if(is.null(exp_val)) {
+    keep <- dat[[exp_var]] != base_val
+  } else {
+    keep <- dat[[exp_var]] == exp_val 
+  }
+  from <- min(which(keep))
+  to <- max(which(keep))
+  # function to compute exposure effect
+  get_eff <- function(beta, nms, means = FALSE) {
+    betadive <- beta[nms %in% c("par_dive", "s_dive")]
+    betasurf <- beta[nms %in% c("par_surf", "s_surf")]
+    # compute kappa parameters 
+    logkappadive <- beta[nms %in% c("log_kappa_dive")]
+    logkappasurf <- beta[nms %in% c("log_kappa_surf")]
+    kappadive <- exp(logkappadive)
+    kappasurf <- exp(logkappasurf)
+    base_diveI <- basedive %*% betadive
+    base_surfI <- basesurf %*% betasurf
+    diveI <- mdive %*% betadive
+    surfI <- msurf %*% betasurf
+    basepred <- predict(mod, newdata = list(lambda_dive = kappadive * base_diveI + logkappadive, 
+                                            lambda_surf = kappasurf * base_surfI + logkappasurf, 
+                                            kappa_dive = kappadive, 
+                                            kappa_surf = kappasurf, 
+                                            from = from, 
+                                            to = to))
+    pred <- predict(mod, newdata = list(lambda_dive = kappadive * diveI + logkappadive, 
+                                        lambda_surf = kappasurf * surfI + logkappasurf, 
+                                        kappa_dive = kappadive, 
+                                        kappa_surf = kappasurf,
+                                        from = from,
+                                        to = to))
+    res <- c(pred$dive - basepred$dive, pred$surface - basepred$surface)
+    if (means) {
+      ret <- list(mean = res, pred = pred, base = basepred)
+      res <- ret
+    }
+    return(res)
+  }
+  # simulate parameters
+  ss <- get_samples(mod, nsims)
+  # compute durations for each sample 
+  sdurs <- apply(ss, 1, FUN = get_eff, nms = colnames(ss), means = TRUE)
+  diff <- sapply(sdurs, FUN = function(x){x$mean})
+  pred <- 
+  base <- sapply(sdurs, FUN = function(x){x$base})
+  # get mean and CIs 
+  nkeep <- sum(keep)
+  dive <- list(mean = rowMeans(diff[1:nkeep,]), 
+               ci = apply(diff[1:nkeep,], 1, quantile, prob = c(0.025, 0.975)), 
+               pred = sapply(sdurs, FUN = function(x){x$pred$dive}), 
+               base = sapply(sdurs, FUN = function(x){x$base$dive}))
+  surf <- list(mean = rowMeans(diff[-(1:nkeep),]), 
+               ci = apply(diff[-(1:nkeep),], 1, quantile, prob = c(0.025, 0.975)), 
+               pred = sapply(sdurs, FUN = function(x){x$pred$surface}), 
+               base = sapply(sdurs, FUN = function(x){x$base$surface}))
+  res <- list(dive = dive, surf = surf, time = dat$time[keep])
   class(res) <- "ExposureEffect"
   return(res) 
 }
+
+
 
 #' Expand covariates across a time grid 
 #'
@@ -867,12 +1021,12 @@ ExpandCovs <- function(dat, tgrid) {
 
 #' Plot exposure effect 
 #'
-#' @param expeff exposure effect estimates from GetExposureEff function
+#' @param expeff exposure effect estimates from GetExposureEff or GetExposureEffIntensity function
 #' @param pick if "both" (default) then for dive and surface, otherwise for "dive" or "surface" 
 #'
 #' @return plots of exposure effect with vertical line at point where no evidence exposure has effect from baseline
 #' @export
-plot.ExposureEffect <- function(expeff, pick = "all") {
+plotExposureEffect <- function(expeff, pick = "all") {
   if (is.null(pick)) pick <- "all"
   if (pick == "all") {
     par(mfrow=c(2, 1))
@@ -880,27 +1034,21 @@ plot.ExposureEffect <- function(expeff, pick = "all") {
     pick <- "all"
   }
   if (pick == "dive" | pick == "all") {
-    sig <- ifelse(expeff$dive$mean > 0, expeff$dive$ci[1,] > 0, expeff$dive$ci[2,] < 0)
-    cols <- ifelse(sig, "blue", "grey80")
-    plot(expeff$predgrid$time, expeff$dive$mean, type = "n", ylim = range(expeff$dive$ci), xlab = "Time", ylab = "Diving intensity exposure effect")
-    lines(expeff$predgrid$time, expeff$dive$ci[1,], lty = "dashed", lwd = 1.5)
-    lines(expeff$predgrid$time, expeff$dive$ci[2,], lty = "dashed", lwd = 1.5)
-    n <- length(expeff$predgrid$time)
-    segments(expeff$predgrid$time[-n], expeff$dive$mean[-n], 
-             expeff$predgrid$time[-1], expeff$dive$mean[-1], 
-             col = cols)
-    abline(h = 0, col = "red", lty = "dotted")
+    sig <- ifelse(expeff$dive$mean > 0, expeff$dive$ci[1,] > 1e-10, expeff$dive$ci[2,] < -1e-10)
+    cols <- ifelse(sig, "blue", "black")
+    plot(expeff$time, expeff$dive$mean, type = "n", ylim = range(expeff$dive$ci), xlab = "Time", ylab = "Diving effect")
+    polygon(c(rev(expeff$time), expeff$time), c(rev(expeff$dive$ci[2,]), expeff$dive$ci[1,]), col = "grey90", border = NA)
+    points(expeff$time, expeff$dive$mean, col = cols, pch = 19)
+    #arrows(expeff$time, expeff$dive$ci[1,], expeff$time, expeff$dive$ci[2,], length = 0.05, code = 3, angle = 90)
+    abline(h = 0, col = "red", lty = "dotted", lwd = 1.5)
   } 
-  if (pick == "surf" | pick == "all") {
-    sig <- ifelse(expeff$surf$mean > 0, expeff$surf$ci[1,] > 0, expeff$surf$ci[2,] < 0)
-    cols <- ifelse(sig, "blue", "grey80")
-    plot(expeff$predgrid$time, expeff$surf$mean, type = "n", ylim = range(expeff$surf$ci), xlab = "Time", ylab = "Surfacing intensity exposure effect")
-    lines(expeff$predgrid$time, expeff$surf$ci[1,], lty = "dashed", lwd = 1.5)
-    lines(expeff$predgrid$time, expeff$surf$ci[2,], lty = "dashed", lwd = 1.5)
-    n <- length(expeff$predgrid$time)
-    segments(expeff$predgrid$time[-n], expeff$surf$mean[-n], 
-             expeff$predgrid$time[-1], expeff$surf$mean[-1], 
-             col = cols, lwd = 1.5)
+  if (pick == "surface" | pick == "all") {
+    sig <- ifelse(expeff$surf$mean > 0, expeff$surf$ci[1,] > 1e-10, expeff$surf$ci[2,] < -1e-10)
+    cols <- ifelse(sig, "blue", "black")
+    plot(expeff$time, expeff$surf$mean, type = "n", ylim = range(expeff$surf$ci), xlab = "Time", ylab = "Surfacing effect")
+    polygon(c(rev(expeff$time), expeff$time), c(rev(expeff$surf$ci[2,]), expeff$surf$ci[1,]), col = "grey90", border = NA)
+    points(expeff$time, expeff$surf$mean, col = cols, pch = 19)
+    #arrows(expeff$time, expeff$surf$ci[1,], expeff$time, expeff$surf$ci[2,], length = 0.05, code = 3, angle = 90)
     abline(h = 0, col = "red", lty = "dotted", lwd = 1.5)
   }
 }
