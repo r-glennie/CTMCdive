@@ -23,6 +23,9 @@ surf_I <- function(t) {
   return(0.1 - f / 50)
 }
 
+# kappa
+kappa <- list(dive = 3, surf = 3)
+
 # mean durations given start time 
 divei <- dive_I(tgr)
 surfi <- surf_I(tgr)
@@ -59,7 +62,7 @@ for (sim in 1:nsims) {
   setTxtProgressBar(pb, sim)
   
   # simulate data
-  dat <- simulateCTMC2(dive_I, surf_I, T, dt, print = FALSE)
+  dat <- simulateCTMC2(dive_I, surf_I, T, dt = 1, kappa = kappa, print = FALSE)
   
   # fit model
   mods[[sim]] <- FitCTMCdive(forms, dat, print = FALSE)

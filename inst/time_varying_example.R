@@ -21,6 +21,9 @@ surf_I <- function(t) {
   return(0.1 - f / 50)
 }
 
+# set kappa
+kappa <- list(dive = 3, surface = 3)
+
 # mean durations given start time 
 divei <- dive_I(tgr)
 surfi <- surf_I(tgr)
@@ -44,7 +47,7 @@ plot(tgr, surf_I(tgr), type = "l", lwd = 1.5, xlab = "Time", ylab = "Surface Int
 
 # simulate data
 set.seed(sample(1:65555, size = 1))
-dat <- simulateCTMC2(dive_I, surf_I, T, dt)
+dat <- simulateCTMC2(dive_I, surf_I, T, dt, kappa = kappa)
 
 # plot data
 plot(dat$time, dat$dive, pch = 19, xlab = "Time of Dive Start", ylab = "Dive Duration")
@@ -56,7 +59,7 @@ plot(dat$time, dat$surf, pch = 19, xlab = "Time of Dive Start", ylab = "Surface 
 forms <- list(surface ~ s(time, bs = "cs"),
               dive ~ s(time, bs = "cs"))
 # fit model
-mod <- FitCTMCdive(forms, dat, dt = dt, print = TRUE)
+mod <- FitCTMCdive(forms, dat, dt = 1, print = TRUE)
 
 # see results
 mod

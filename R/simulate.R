@@ -61,7 +61,7 @@ simulateCTMC <- function(dive_fn, surf_fn, T, dt, sd = NULL, print = TRUE) {
 #'
 #' @return CTMC dataset 
 #' @export
-simulateCTMC2 <- function(dive_fn, surf_fn, T, dt, tstart = 0, sd = NULL, print = TRUE) {
+simulateCTMC2 <- function(dive_fn, surf_fn, T, dt, tstart = 0, kappa = list(dive = 1, surf = 1), sd = NULL, print = TRUE) {
   tgr <- seq(0, T, by = dt)
   # predict intensity on fine grid 
   odiveI <- dive_fn(tgr)
@@ -84,15 +84,17 @@ simulateCTMC2 <- function(dive_fn, surf_fn, T, dt, tstart = 0, sd = NULL, print 
   }
   diveI <- odiveI * exp(rf[1])
   surfI <- osurfI * exp(rf[2])
+  kdive <- kappa$dive
+  ksurf <- kappa$surf
   while (t < T) {
     #cat("t = ", t, " T = ", T, "\r")
-    Lsurf <- cumsum(surfI[tgr >= t]) * dt
+    Lsurf <- cumsum(ksurf * surfI[tgr >= t]^ksurf * (tgr[tgr >= t] - t)^(ksurf - 1)) * dt
     cdf_surf <- 1 - exp(-Lsurf)
     u_dive <- runif(1)
     t_dive <- tgr[tgr >= t][which.min(abs(cdf_surf - u_dive))]
     if (t_dive < t + 1e-10) t_dive <- t + dt / 2
     if (t_dive > T - dt) break 
-    Ldive <- cumsum(diveI[tgr >= t_dive]) * dt 
+    Ldive <- cumsum(kdive * diveI[tgr >= t_dive]^kdive * (tgr[tgr >= t_dive] - t_dive)^(kdive - 1)) * dt 
     cdf_dive <- 1 - exp(-Ldive)
     u_surf <- runif(1)
     t_surf <- tgr[tgr >= t_dive][which.min(abs(cdf_dive - u_surf))]
@@ -116,13 +118,13 @@ simulateCTMC2 <- function(dive_fn, surf_fn, T, dt, tstart = 0, sd = NULL, print 
     t <- 0 
     while (t < tstart) {
       #cat("t = ", t, " T = ", T, "\r")
-      Lsurf <- cumsum(surfI[tgr >= t]) * dt
+      Lsurf <- cumsum(ksurf * surfI[tgr >= t]^ksurf * (tgr[tgr >= t] - t)^(ksurf - 1)) * dt
       cdf_surf <- 1 - exp(-Lsurf)
       u_dive <- runif(1)
       t_dive <- tgr[tgr >= t][which.min(abs(cdf_surf - u_dive))]
       if (t_dive < t + 1e-10) t_dive <- t + dt / 2
       if (t_dive > T - dt) break 
-      Ldive <- cumsum(diveI[tgr >= t_dive]) * dt 
+      Ldive <- cumsum(kdive * diveI[tgr >= t_dive]^kdive * (tgr[tgr >= t_dive] - t_dive)^(kdive - 1)) * dt
       cdf_dive <- 1 - exp(-Ldive)
       u_surf <- runif(1)
       t_surf <- tgr[tgr >= t_dive][which.min(abs(cdf_dive - u_surf))]

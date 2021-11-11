@@ -14,6 +14,9 @@ dt <- 0.1
 dive_I <- function(t) {return(rep(0.06, length(t)))}
 surf_I <- function(t) {return(rep(0.04, length(t)))}
 
+# set kappa
+kappa <- list(dive = 5, surf = 5)
+
 # setup model
 forms <- list(surface ~ 1,
               dive ~ 1)
@@ -27,7 +30,7 @@ for (sim in 1:nsims) {
   cat(sim, " / ", nsims, "\r")
   
   # simulate data
-  dat <- simulateCTMC2(dive_I, surf_I, T, dt, print = FALSE)
+  dat <- simulateCTMC2(dive_I, surf_I, T, dt, kappa = kappa, print = FALSE)
   
   # fit model
   mods[[sim]] <- FitCTMCdive(forms, dat, dt = 1, print = FALSE)

@@ -423,26 +423,28 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
 #' @return prints a summary
 #' @aliases print.CTMCdive
 #' @export
-summary.CTMCdive <- function(x, ...) {
-  cat("Continuous-time Markov Chain Diving Model\n")
-  cat("Number of Dives: ", nrow(x$dat), "\n")
-  cat("\n")
-  cat("Model formulae:\n")
-  cat("  ")
-  print(x$forms[[1]])
-  cat("  ")
-  print(x$forms[[2]])
-  cat("\n")
-
-  cat("AIC:", AIC(x)$AIC,"\n")
-  cat("\n")
-
-  cat(rep("-", 30), "\n")
-  cat("DIVE INTENSITY\n")
-  cat("\nFixed effects:\n")
-  print(signif(x$res$dive, 4))
-  cat("\n")
-
+summary.CTMCdive <- function(x, print = TRUE, ...) {
+  if(print) {
+    cat("Continuous-time Markov Chain Diving Model\n")
+    cat("Number of Dives: ", nrow(x$dat), "\n")
+    cat("\n")
+    cat("Model formulae:\n")
+    cat("  ")
+    print(x$forms[[1]])
+    cat("  ")
+    print(x$forms[[2]])
+    cat("\n")
+  
+    cat("AIC:", AIC(x)$AIC,"\n")
+    cat("\n")
+  
+    cat(rep("-", 30), "\n")
+    cat("DIVE INTENSITY\n")
+    cat("\nFixed effects:\n")
+    print(signif(x$res$dive, 4))
+    cat("\n")
+  }
+  sdive <- ssurface <- NULL
   if(!is.null(x$sm$s_dive_names)) {
     sdive <- data.frame(Term = x$sm$s_dive_names)
     sdive[["k'"]] <- NA
@@ -463,22 +465,25 @@ summary.CTMCdive <- function(x, ...) {
     }
 
     sdive$EDF <- signif(sdive$EDF, 4)
-    cat("\nSmooth terms:\n")
-    print(sdive)
-    cat("\n")
+    if(print) {
+      cat("\nSmooth terms:\n")
+      print(sdive)
+      cat("\n")
+    }
   }
 
-  cat("\nkappa: ",
-      signif(exp(x$rep$par.fixed[names(x$rep$par.fixed) == "log_kappa_dive"]), 4))
-  cat("\n")
-  cat("\n")
+  if(print) {
+    cat("\nkappa: ",
+        signif(exp(x$rep$par.fixed[names(x$rep$par.fixed) == "log_kappa_dive"]), 4))
+    cat("\n")
+    cat("\n")
 
-  cat(rep("-", 30), "\n")
-
-  cat("SURFACE INTENSITY\n")
-  cat("\nFixed effects:\n")
-  print(signif(x$res$surface, 4))
-
+    cat(rep("-", 30), "\n")
+  
+    cat("SURFACE INTENSITY\n")
+    cat("\nFixed effects:\n")
+    print(signif(x$res$surface, 4))
+  }
   if(!is.null(x$sm$s_surface_names)) {
     ssurface <- data.frame(Term = x$sm$s_surface_names)
     ssurface[["k'"]] <- NA
@@ -497,21 +502,23 @@ summary.CTMCdive <- function(x, ...) {
       ssurface$EDF[i] <- EDF_f(X, S, lambda[i], Sn)
       starti <- starti + Sn
     }
-
+    
     ssurface$EDF <- signif(ssurface$EDF, 4)
-    cat("\nSmooth terms:\n")
-    print(ssurface)
+    if(print) {
+      cat("\nSmooth terms:\n")
+      print(ssurface)
+      cat("\n")
+    }
+  }
+  
+  if(print) {
+    cat("\nkappa: ",
+        signif(exp(x$rep$par.fixed[names(x$rep$par.fixed) == "log_kappa_surf"]), 4))
+    cat("\n")
+    cat("\n")
     cat("\n")
   }
-  cat("\nkappa: ",
-      signif(exp(x$rep$par.fixed[names(x$rep$par.fixed) == "log_kappa_surf"]), 4))
-  cat("\n")
-  cat("\n")
-
-
-
-  cat("\n")
-  invisible(x)
+  invisible(list(dive = sdive, surface = ssurface))
 }
 
 #' @export
@@ -551,6 +558,8 @@ predict.CTMCdive <- function(x, newdata = NULL, ...) {
       x_dive <- x$rep$par.random[names(x$rep$par.random) == "s_dive"]
       lambda_dive <- lambda_dive + (x$sm$A_grid_dive %*% x_dive)
     }
+    diveI <- exp(lambda_dive)
+    surfI <- exp(lambda_surf)
     # weibull
     log_kappa_dive <- x$rep$par.fixed["log_kappa_dive"]
     log_kappa_surf <- x$rep$par.fixed["log_kappa_surf"]
@@ -563,6 +572,8 @@ predict.CTMCdive <- function(x, newdata = NULL, ...) {
   } else {
     lambda_dive <- newdata$lambda_dive
     lambda_surf <- newdata$lambda_surf 
+    diveI <- exp(lambda_dive)
+    surfI <- exp(lambda_surf)
     kappa_dive <- newdata$kappa_dive
     kappa_surf <- newdata$kappa_surf
     from <- ifelse(is.null(newdata$from), 1, newdata$from)
@@ -600,8 +611,8 @@ predict.CTMCdive <- function(x, newdata = NULL, ...) {
   # return predictions
   res <- list(surface = exp_surf[from:to], 
               dive = exp_dive[from:to], 
-              diveI = exp(lambda_dive), 
-              surfI = exp(lambda_surf), 
+              diveI = diveI, 
+              surfI = surfI, 
               rdive = r_dive[from:to], 
               rsurf = r_surf[from:to])
   return(res)

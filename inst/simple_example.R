@@ -7,14 +7,17 @@ library(CTMCdive)
 dive_I <- function(t) {return(rep(0.06, length(t)))}
 surf_I <- function(t) {return(rep(0.04, length(t)))}
 
+# set kappa
+kappa <- list(dive = 5, surf = 5)
+
 # total observation time 
 T <- 60 * 24 * 7
 
 # time step 
-dt <- 1
+dt <- 0.1
 
 # simulate data
-dat <- simulateCTMC2(dive_I, surf_I, T, dt)
+dat <- simulateCTMC2(dive_I, surf_I, T, dt, kappa = kappa)
 
 # plot data
 plot(dat$dive, pch = 19, xlab = "Time of Dive Start", ylab = "Dive Duration")
