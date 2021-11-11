@@ -9,17 +9,20 @@ T <- 24 * 60 * 7
 exp_T <- T / 2
 
 # time step 
-dt <- 1
+dt <- 0.01
 
 # time-varying intensities  
 tgr <- seq(0, T, by = dt)
 dive_I <- function(t, exp = TRUE) {
-  eff <- 0.05 * (cos(2 * pi * t / T) + 1.2)
-  if(exp) eff <- ifelse(t > exp_T, eff + 0.1 * exp(-(t - exp_T) / 500), eff)
+  eff <- 0.06 * (sin(2 * pi * t / T - pi / 2)) + 6 * 0.03
+  a <- exp_T - 24 * 60 
+  b <- exp_T + 12 * 60
+  if(exp) eff <- ifelse(t > exp_T, eff - 0.2 * (t - a)/(exp_T - a) * (t - b)/(exp_T - b) * (t > a) * (t < b), eff)
   return(eff)
 }
 surf_I <- function(t) {
-  return(0.02 * (sin(2 * pi * t / T) + 1.2))
+  return(rep(0.05, length(t)))
+  #return(0.02 * (sin(2 * pi * t / T) + 1.2))
 }
 # plot truth 
 plot(tgr, dive_I(tgr), type = "l", lwd = 1.5, xlab = "Time", ylab = "Dive Intensity")
@@ -28,12 +31,21 @@ abline(v = c(exp_T, exp_T + 24 * 60), col = "firebrick", lty = "dashed")
 plot(tgr, surf_I(tgr), type = "l", lwd = 1.5, xlab = "Time", ylab = "Surface Intensity")
 
 # simulate data
-set.seed(sample(1:65555, size = 1))
-dat <- simulateCTMC(dive_I, surf_I, T, dt)
+seed <- sample(1:65555, size = 1)
+set.seed(seed)
+dat <- simulateCTMC2(dive_I, surf_I, T, dt, tstart = exp_T)
+
+# add time of day
+make_hr <- function(t) {
+  return(t %% (24 * 60))
+}
+dat$hour<- make_hr(dat$time)
+attributes(dat$hour) <- list(class = "custom", f = make_hr)
 
 # add exposure data
 dat$expt <- ifelse(dat$time >= exp_T & dat$time < exp_T + 24 * 60, dat$time - exp_T, 0)
-dat$expf <- factor(ifelse(dat$time >= exp_T & dat$time < exp_T + 24 * 60, 1, 0))
+#dat$expf <- factor(ifelse(dat$time >= exp_T & dat$time < exp_T + 24 * 60, 1, 0), ordered = TRUE)
+dat$expf <- factor(ifelse(dat$time >= exp_T, 1, 0), ordered = TRUE)
 
 # plot data
 plot(dat$time, dat$dive, pch = 19, xlab = "Time of Dive Start", ylab = "Dive Duration")
@@ -44,10 +56,10 @@ abline(v = c(exp_T, exp_T + 24 * 60), col = "firebrick", lty = "dashed")
 # Fit Model ---------------------------------------------------------------
 
 # setup model
-forms <- list(surface ~ s(time, bs = "cs"),
-              dive ~ s(time, bs = "cs", by = expf))
+forms <- list(surface ~ 1,
+              dive ~ s(time, bs = "cs") + s(time, by = expf, bs = "ts", m = 1) + expf)
 # fit model
-mod <- FitCTMCdive(forms, dat, print = TRUE)
+mod <- FitCTMCdive(forms, dat, dt = 1, print = TRUE)
 
 # see results
 mod
@@ -55,7 +67,7 @@ exp(mod$res$surface[,1])
 exp(mod$res$dive[,1])
 
 # plot fitted model
-plot(mod)
+plot(mod, pick = "surface")
 
 # get predicted values
 pred <- predict(mod)
@@ -74,19 +86,24 @@ qqnorm(rsurf); qqline(rsurf)
 ks.test(rsurf, "pnorm")
 ks.test(rdive, "pnorm")
 
-
 # estimated exposure effect
-tgrid <- seq(exp_T, exp_T + 24 * 60, 1)
-predgrid <- data.frame(ID = 1, dive = 1, surface = 1, time = tgrid, expf = 1)
-expeff <- GetExposureEff(mod, predgrid, exp = "expf")
-plot(expeff, pick = "dive")
-ends <- 5900
+expeff <- GetExposureEff(mod, exp_var = "expf")
+plotExposureEffect(expeff, pick = "dive")
+plotExposureEffect(expeff, pick = "surface")
+
+# plot exposure against baseline prediction 
+limits <- c(exp_T - 1 * 24 * 60, exp_T + 2 * 24 * 60)
+plot(dat$time, dat$surf, pch = 19, xlab = "Time of Dive Start", ylab = "Surface Duration", xlim = limits)
+abline(v = c(exp_T, exp_T + 24 * 60), col = "firebrick", lty = "dashed")
+lines(dat$time[dat$time < exp_T], pred$surface[dat$time < exp_T], col = "steelblue", lwd = 1.5)
+lines(dat$time[dat$time > exp_T + 24 * 60], pred$surface[dat$time > exp_T + 24 * 60], col = "steelblue", lwd = 1.5)
+matlines(expeff$time, expeff$surf$pred[,1:20], col = "firebrick", lwd = 1.5, alpha = 0.7)
+matlines(expeff$time, expeff$surf$base[,1:20], col = "steelblue")
 
 # plot estimated intensities against truth
-plot(tgr, dive_I(tgr), type = "l", lwd = 1.5, xlab = "Time", ylab = "Dive Intensity")
+plot(tgr, dive_I(tgr), type = "l", lwd = 1.5, xlab = "Time", ylab = "Dive Intensity", ylim = c(0, 0.25))
 lines(mod$sm$ints, pred$diveI, lwd = 1.5, col = "firebrick")
 lines(tgr, dive_I(tgr, exp = FALSE), col = "steelblue")
-abline(v = ends, lty = "dashed")
 plot(tgr, surf_I(tgr), type = "l", lwd = 1.5, xlab = "Time", ylab = "Surface Intensity")
 lines(mod$sm$ints, pred$surfI, lwd = 1.5, col = "firebrick")
 
