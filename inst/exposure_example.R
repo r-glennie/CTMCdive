@@ -21,8 +21,8 @@ dive_I <- function(t, exp = TRUE) {
   return(eff)
 }
 surf_I <- function(t) {
-  return(rep(0.05, length(t)))
-  #return(0.02 * (sin(2 * pi * t / T) + 1.2))
+  #return(rep(0.05, length(t)))
+  return(0.02 * (sin(2 * pi * t / T) + 1.2))
 }
 # plot truth 
 plot(tgr, dive_I(tgr), type = "l", lwd = 1.5, xlab = "Time", ylab = "Dive Intensity")
@@ -35,17 +35,10 @@ seed <- sample(1:65555, size = 1)
 set.seed(seed)
 dat <- simulateCTMC2(dive_I, surf_I, T, dt, tstart = exp_T)
 
-# add time of day
-make_hr <- function(t) {
-  return(t %% (24 * 60))
-}
-dat$hour<- make_hr(dat$time)
-attributes(dat$hour) <- list(class = "custom", f = make_hr)
-
 # add exposure data
 dat$expt <- ifelse(dat$time >= exp_T & dat$time < exp_T + 24 * 60, dat$time - exp_T, 0)
-#dat$expf <- factor(ifelse(dat$time >= exp_T & dat$time < exp_T + 24 * 60, 1, 0), ordered = TRUE)
-dat$expf <- factor(ifelse(dat$time >= exp_T, 1, 0), ordered = TRUE)
+dat$expf <- factor(ifelse(dat$time >= exp_T & dat$time < exp_T + 24 * 60, 1, 0), ordered = TRUE)
+#dat$expf <- factor(ifelse(dat$time >= exp_T, 1, 0), ordered = TRUE)
 
 # plot data
 plot(dat$time, dat$dive, pch = 19, xlab = "Time of Dive Start", ylab = "Dive Duration")
@@ -56,8 +49,8 @@ abline(v = c(exp_T, exp_T + 24 * 60), col = "firebrick", lty = "dashed")
 # Fit Model ---------------------------------------------------------------
 
 # setup model
-forms <- list(surface ~ 1,
-              dive ~ s(time, bs = "cs") + s(time, by = expf, bs = "ts", m = 1) + expf)
+forms <- list(surface ~ s(time, bs = "cs") + + s(time, by = expf, bs = "ts", m = 1) + s(expf, bs = "re"),
+              dive ~ s(time, bs = "cs") + s(time, by = expf, bs = "ts", m = 1) + s(expf, bs = "re"))
 # fit model
 mod <- FitCTMCdive(forms, dat, dt = 1, print = TRUE)
 
@@ -67,7 +60,7 @@ exp(mod$res$surface[,1])
 exp(mod$res$dive[,1])
 
 # plot fitted model
-plot(mod, pick = "surface")
+plot(mod)
 
 # get predicted values
 pred <- predict(mod)
