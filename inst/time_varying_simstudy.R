@@ -8,18 +8,19 @@ nsims <- 100
 T <- 24 * 60 * 7
 
 # time step 
-dt <- 1
+dt <- 0.01
 
-# time-varying intensities  
+#time-varying intensities  
 tgr <- seq(0, T, by = dt)
 dive_I <- function(t) {
+  #return(rep(100, length(t)))
   return(0.01 + 0.2 * (t/T - 1/2)^2)
 }
 surf_I <- function(t) {
   x <- t / T
-  f <- 0.2 * x^11 * (10 * (1 - x))^6 + 10 * 
+  f <- 0.2 * x^11 * (10 * (1 - x))^6 + 4 * 
     (10 * x)^3 * (1 - x)^10
-  return(0.02 + f / 150)
+  return(0.1 - f / 50)
 }
 
 # mean durations given start time 
@@ -36,8 +37,8 @@ dive_dur <- function(t, surfi, tgr, dt) {
   est_duration <- sum(surv) * dt
   return(est_duration)
 }
-surfdurs <- sapply(tgr, surf_dur, divei = divei, tgr = tgr, dt = dt)
-divedurs <- sapply(tgr, dive_dur, surfi = surfi, tgr = tgr, dt = dt)
+#surfdurs <- sapply(tgr, surf_dur, divei = divei, tgr = tgr, dt = dt)
+#divedurs <- sapply(tgr, dive_dur, surfi = surfi, tgr = tgr, dt = dt)
 
 # plot truth 
 plot(tgr, dive_I(tgr), type = "l", lwd = 1.5, xlab = "Time", ylab = "Dive Intensity")
@@ -75,8 +76,10 @@ ints <- mods[[1]]$sm$ints
 # estimated intensities 
 plot(tgr, dive_I(tgr), type = "l", lwd = 1.5, xlab = "Time", ylab = "Dive Intensity")
 matlines(ints, divepred, col = "grey80")
+lines(ints, rowMeans(divepred), col = "firebrick", lwd = 1.5)
 plot(tgr, surf_I(tgr), type = "l", lwd = 1.5, xlab = "Time", ylab = "Surface Intensity")
 matlines(ints, surfpred, col = "grey80")
+lines(ints, rowMeans(surfpred), col = "firebrick", lwd = 1.5)
 
 # predicted durations
 estD <- sapply(preds, FUN = function(x) {x$dive})
@@ -90,25 +93,29 @@ trueS <- lapply(mods, FUN = function(m) {
 
 # dive predicted durations
 reldistD <- sapply(1:length(trueD), FUN = function(i) {
-  reldist <- 100 * (estD[[i]] - trueD[[i]]) / trueD[[i]]
-  mean(reldist)
+  reldist <- abs(estD[[i]] - trueD[[i]]) #/ trueD[[i]]
+  reldist[1]
 })
 summary(reldistD)
 hist(reldistD)
 
-j <- 63
-plot(mods[[j]]$dat$time, estD[[j]])
-lines(mods[[j]]$dat$time, trueD[[j]])
+j <- 72
+plot(mods[[j]]$dat$time, estD[[j]], col = "red")
+points(mods[[j]]$dat$time, trueD[[j]])
 
 # surface predicted durations
 reldistS <- sapply(1:length(trueS), FUN = function(i) {
-  reldist <- 100 * (estS[[i]] - trueS[[i]]) / trueS[[i]]
-  mean(reldist)
+  reldist <- (estS[[i]] - trueS[[i]]) / trueS[[i]]
+  100 * mean(reldist)
 })
 summary(reldistS)
 hist(reldistS)
 
-j <- 72
-plot(mods[[j]]$dat$time, estS[[j]])
-lines(mods[[j]]$dat$time, trueS[[j]])
+j <- 10
+plot(mods[[j]]$dat$time, estS[[j]], col = "red", pch = 20)
+points(mods[[j]]$dat$time, trueS[[j]], pch = 20)
+
+
+
+
 

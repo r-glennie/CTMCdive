@@ -3,21 +3,22 @@ library(CTMCdive)
 # Simulate data -----------------------------------------------------------
 
 # total observation time 
-T <- 24 * 60 * 7
+T <- 24 * 60 * 7 
 
 # time step 
-dt <- 1
+dt <- 0.1
 
 # time-varying intensities  
 tgr <- seq(0, T, by = dt)
 dive_I <- function(t) {
+  #return(rep(0.06, length(t)))
   return(0.01 + 0.2 * (t/T - 1/2)^2)
 }
 surf_I <- function(t) {
   x <- t / T
-  f <- 0.2 * x^11 * (10 * (1 - x))^6 + 10 * 
+  f <- 0.2 * x^11 * (10 * (1 - x))^6 + 4 * 
     (10 * x)^3 * (1 - x)^10
-  return(0.02 + f / 150)
+  return(0.1 - f / 50)
 }
 
 # mean durations given start time 
@@ -34,8 +35,8 @@ dive_dur <- function(t, surfi, tgr, dt) {
   est_duration <- sum(surv) * dt
   return(est_duration)
 }
-surfdurs <- sapply(tgr, surf_dur, divei = divei, tgr = tgr, dt = dt)
-divedurs <- sapply(tgr, dive_dur, surfi = surfi, tgr = tgr, dt = dt)
+#surfdurs <- sapply(tgr, surf_dur, divei = divei, tgr = tgr, dt = dt)
+#divedurs <- sapply(tgr, dive_dur, surfi = surfi, tgr = tgr, dt = dt)
 
 # plot truth 
 plot(tgr, dive_I(tgr), type = "l", lwd = 1.5, xlab = "Time", ylab = "Dive Intensity")
@@ -46,8 +47,8 @@ set.seed(sample(1:65555, size = 1))
 dat <- simulateCTMC2(dive_I, surf_I, T, dt)
 
 # plot data
-plot(dat$dive, pch = 19, xlab = "Time of Dive Start", ylab = "Dive Duration")
-plot(dat$surf, pch = 19, xlab = "Time of Dive Start", ylab = "Surface Duration")
+plot(dat$time, dat$dive, pch = 19, xlab = "Time of Dive Start", ylab = "Dive Duration")
+plot(dat$time, dat$surf, pch = 19, xlab = "Time of Dive Start", ylab = "Surface Duration")
 
 # Fit Model ---------------------------------------------------------------
 
@@ -55,7 +56,7 @@ plot(dat$surf, pch = 19, xlab = "Time of Dive Start", ylab = "Surface Duration")
 forms <- list(surface ~ s(time, bs = "cs"),
               dive ~ s(time, bs = "cs"))
 # fit model
-mod <- FitCTMCdive(forms, dat, print = TRUE)
+mod <- FitCTMCdive(forms, dat, dt = dt, print = TRUE)
 
 # see results
 mod
