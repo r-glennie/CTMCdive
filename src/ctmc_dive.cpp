@@ -36,7 +36,7 @@ Type objective_function<Type>::operator() ()
   DATA_IVECTOR(S_dive_n); // sizes of sparse matrices
   DATA_IVECTOR(S_surface_n); // sizes of sparse matrices
   DATA_INTEGER(include_smooths); // > 0 = include penalty in likelihood evaluation
-  DATA_INTEGER(re); // include discrete random effect on dive 
+  DATA_SCALAR(re); // include discrete random effect on dive 
   
   PARAMETER_VECTOR(par_dive); // dive parameters
   PARAMETER_VECTOR(par_surf); // surface parameters
