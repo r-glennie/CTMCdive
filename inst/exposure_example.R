@@ -57,19 +57,7 @@ abline(v = c(exp_T, exp_T + 24 * 60), col = "firebrick", lty = "dashed")
 forms <- list(surface ~ s(time, bs = "cs") + + s(time, by = expf, bs = "ts", m = 1) + s(expf, bs = "re"),
               dive ~ s(time, bs = "cs") + s(time, by = expf, bs = "ts", m = 1) + s(expf, bs = "re"))
 # fit model
-mod_sm <- FitCTMCdive(forms, dat, dt = 1, print = TRUE)
-
-# setup model
-forms <- list(surface ~ s(time, bs = "cs") + spike,
-              dive ~ s(time, bs = "cs") + spike)
-# fit model
-mod_spike <- FitCTMCdive(forms, dat, dt = 1, print = TRUE)
-
-# Response 
-AIC(mod_sm, mod_spike)
-
-# Best model
-mod <- mod_spike
+mod <- FitCTMCdive(forms, dat, dt = 1, print = TRUE)
 
 # see results
 summary(mod)
@@ -97,8 +85,7 @@ ks.test(rsurf, "pnorm")
 ks.test(rdive, "pnorm")
 
 # estimated exposure effect
-exp_var <- "spike"
-expeff <- GetExposureEff(mod, exp_var = exp_var)
+expeff <- GetExposureEff(mod, exp_var = "expf")
 plotExposureEffect(expeff, pick = "dive")
 plotExposureEffect(expeff, pick = "surface")
 
