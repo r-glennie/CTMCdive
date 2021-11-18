@@ -17,13 +17,17 @@ dive_I <- function(t, exp = TRUE) {
   eff <- 0.06 * (sin(2 * pi * t / T - pi / 2)) + 6 * 0.03
   a <- exp_T - 24 * 60 
   b <- exp_T + 12 * 60
-  if(exp) eff <- ifelse(t > exp_T, eff - 0.2 * (t - a)/(exp_T - a) * (t - b)/(exp_T - b) * (t > a) * (t < b), eff)
+  if(exp) eff <- ifelse(t > exp_T, eff - 0.05 * (t - a)/(exp_T - a) * (t - b)/(exp_T - b) * (t > a) * (t < b), eff)
   return(eff)
 }
 surf_I <- function(t) {
   #return(rep(0.05, length(t)))
   return(0.02 * (sin(2 * pi * t / T) + 1.2))
 }
+
+# kappa 
+kappa <- list(dive = 3, surf = 3)
+
 # plot truth 
 plot(tgr, dive_I(tgr), type = "l", lwd = 1.5, xlab = "Time", ylab = "Dive Intensity")
 lines(tgr, dive_I(tgr, exp = FALSE), col = "steelblue")
@@ -33,7 +37,7 @@ plot(tgr, surf_I(tgr), type = "l", lwd = 1.5, xlab = "Time", ylab = "Surface Int
 # simulate data
 seed <- sample(1:65555, size = 1)
 set.seed(seed)
-dat <- simulateCTMC2(dive_I, surf_I, T, dt, tstart = exp_T)
+dat <- simulateCTMC2(dive_I, surf_I, T, dt, tstart = exp_T, kappa = kappa)
 
 # add exposure data
 dat$expt <- ifelse(dat$time >= exp_T & dat$time < exp_T + 24 * 60, dat$time - exp_T, 0)
@@ -55,7 +59,7 @@ forms <- list(surface ~ s(time, bs = "cs") + + s(time, by = expf, bs = "ts", m =
 mod <- FitCTMCdive(forms, dat, dt = 1, print = TRUE)
 
 # see results
-mod
+summary(mod)
 exp(mod$res$surface[,1])
 exp(mod$res$dive[,1])
 
