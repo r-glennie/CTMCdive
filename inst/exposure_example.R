@@ -13,11 +13,12 @@ dt <- 0.01
 
 # time-varying intensities  
 tgr <- seq(0, T, by = dt)
-dive_I <- function(t, exp = TRUE) {
+dive_I <- function(t, exp = TRUE, spike = TRUE) {
   eff <- 0.06 * (sin(2 * pi * t / T - pi / 2)) + 6 * 0.03
   a <- exp_T - 24 * 60 
   b <- exp_T + 12 * 60
-  if(exp) eff <- ifelse(t > exp_T, eff - 0.05 * (t - a)/(exp_T - a) * (t - b)/(exp_T - b) * (t > a) * (t < b), eff)
+  if(exp & !spike) eff <- ifelse(t > exp_T, eff - 0.15 * (t - a)/(exp_T - a) * (t - b)/(exp_T - b) * (t > a) * (t < b), eff)
+  if(exp & spike) eff <- ifelse(t > exp_T, eff - 0.15 * (t >= exp_T) * (t <= exp_T + 100), eff)
   return(eff)
 }
 surf_I <- function(t) {
@@ -42,7 +43,7 @@ dat <- simulateCTMC2(dive_I, surf_I, T, dt, tstart = exp_T, kappa = kappa)
 # add exposure data
 dat$expt <- ifelse(dat$time >= exp_T & dat$time < exp_T + 24 * 60, dat$time - exp_T, 0)
 dat$expf <- factor(ifelse(dat$time >= exp_T & dat$time < exp_T + 24 * 60, 1, 0), ordered = TRUE)
-#dat$expf <- factor(ifelse(dat$time >= exp_T, 1, 0), ordered = TRUE)
+dat$spike <- factor(ifelse(dat$time >= exp_T & dat$time <= exp_T + 1e-5, 1, 0))
 
 # plot data
 plot(dat$time, dat$dive, pch = 19, xlab = "Time of Dive Start", ylab = "Dive Duration")
@@ -56,7 +57,19 @@ abline(v = c(exp_T, exp_T + 24 * 60), col = "firebrick", lty = "dashed")
 forms <- list(surface ~ s(time, bs = "cs") + + s(time, by = expf, bs = "ts", m = 1) + s(expf, bs = "re"),
               dive ~ s(time, bs = "cs") + s(time, by = expf, bs = "ts", m = 1) + s(expf, bs = "re"))
 # fit model
-mod <- FitCTMCdive(forms, dat, dt = 1, print = TRUE)
+mod_sm <- FitCTMCdive(forms, dat, dt = 1, print = TRUE)
+
+# setup model
+forms <- list(surface ~ s(time, bs = "cs") + spike,
+              dive ~ s(time, bs = "cs") + spike)
+# fit model
+mod_spike <- FitCTMCdive(forms, dat, dt = 1, print = TRUE)
+
+# Response 
+AIC(mod_sm, mod_spike)
+
+# Best model
+mod <- mod_spike
 
 # see results
 summary(mod)
@@ -84,7 +97,8 @@ ks.test(rsurf, "pnorm")
 ks.test(rdive, "pnorm")
 
 # estimated exposure effect
-expeff <- GetExposureEff(mod, exp_var = "expf")
+exp_var <- "spike"
+expeff <- GetExposureEff(mod, exp_var = exp_var)
 plotExposureEffect(expeff, pick = "dive")
 plotExposureEffect(expeff, pick = "surface")
 

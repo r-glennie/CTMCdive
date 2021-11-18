@@ -996,16 +996,15 @@ GetExposureEff <- function(mod, exp_var = "exp", base_val = 0, exp_val = NULL, n
   # compute durations for each sample 
   sdurs <- apply(ss, 1, FUN = get_eff, nms = colnames(ss), means = TRUE)
   diff <- sapply(sdurs, FUN = function(x){x$mean})
-  pred <- 
   base <- sapply(sdurs, FUN = function(x){x$base})
   # get mean and CIs 
   nkeep <- sum(keep)
-  dive <- list(mean = rowMeans(diff[1:nkeep,]), 
-               ci = apply(diff[1:nkeep,], 1, quantile, prob = c(0.025, 0.975)), 
+  dive <- list(mean = rowMeans(diff[1:nkeep,,drop=FALSE]), 
+               ci = apply(diff[1:nkeep,,drop=FALSE], 1, quantile, prob = c(0.025, 0.975)), 
                pred = sapply(sdurs, FUN = function(x){x$pred$dive}), 
                base = sapply(sdurs, FUN = function(x){x$base$dive}))
-  surf <- list(mean = rowMeans(diff[-(1:nkeep),]), 
-               ci = apply(diff[-(1:nkeep),], 1, quantile, prob = c(0.025, 0.975)), 
+  surf <- list(mean = rowMeans(diff[-(1:nkeep),,drop=FALSE]), 
+               ci = apply(diff[-(1:nkeep),,drop=FALSE], 1, quantile, prob = c(0.025, 0.975)), 
                pred = sapply(sdurs, FUN = function(x){x$pred$surface}), 
                base = sapply(sdurs, FUN = function(x){x$base$surface}))
   res <- list(dive = dive, surf = surf, time = dat$time[keep])
