@@ -94,17 +94,22 @@ Type objective_function<Type>::operator() ()
   }
   
   if (re > 0 & re > 1.5) {
-    matrix<Type> V(2, 2); 
-    V(0,0) = rf_sd(0); 
-    V(1,1) = rf_sd(1); 
-    V(0,1) = log_rf_sd(2);
-    V(1,0) = log_rf_sd(2); 
+    matrix<Type> V(2, 2);
+    V(0,0) = Type(1.0); 
+    V(1,1) = Type(1.0); 
+    Type rho = invlogit(log_rf_sd(2)) * Type(2) - Type(1); 
+    V(0,1) = rho;
+    V(1,0) = rho; 
     density::MVNORM_t<Type> dmnorm(V);
+    vector<Type> rsd(2);
+    rsd(0) = rf_sd(0);
+    rsd(1) = rf_sd(1); 
+    density::VECSCALE_t<density::MVNORM_t<Type>> scdmnorm = density::VECSCALE(dmnorm, rsd); 
     vector<Type> x(2); 
     for (int i = 0; i < rf_dive.size(); ++i) {
       x(0) = rf_dive(i);
       x(1) = rf_surf(i); 
-      nll += dmnorm(x); 
+      nll += scdmnorm(x); 
     }
   }
   

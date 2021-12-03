@@ -75,7 +75,7 @@ simulateCTMC2 <- function(dive_fn, surf_fn, T, dt, tstart = 0, kappa = list(dive
     if (length(sd) < 3) {
       rf <- rnorm(2, 0, sd)
     } else {
-      V <- matrix(c(sd[1]^2, sd[3], sd[3], sd[2]^2), nr = 2, nc = 2)
+      V <- matrix(c(sd[1]^2, sd[3]*sd[1]*sd[2], sd[3]*sd[1]*sd[2], sd[2]^2), nr = 2, nc = 2)
       rf <- as.numeric(rmvn(n = 1, mu = c(0, 0), V = V))
     }
     
