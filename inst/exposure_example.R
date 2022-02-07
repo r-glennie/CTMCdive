@@ -92,6 +92,7 @@ plotExposureEffect(expeff, pick = "dive")
 abline(v = c(exp_T, exp_T + 24 * 60))
 
 # plot exposure against baseline prediction 
+limits <- c(exp_T - 24*60, exp_T + 3*24*60)
 plot(dat$time, dat$dive, pch = 19, xlab = "Time of Dive Start", ylab = "Surface Duration", xlim = limits)
 abline(v = c(exp_T, exp_T + 24 * 60), col = "firebrick", lty = "dashed")
 lines(dat$time[dat$time < exp_T], pred$dive[dat$time < exp_T], col = "steelblue", lwd = 1.5)
