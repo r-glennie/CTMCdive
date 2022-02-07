@@ -1132,18 +1132,18 @@ plotExposureEffect <- function(expeff, pick = "all") {
 #'
 #' @return fitted model if which = 1,2 or list of three fitted models if which = 0
 #' @export
-update.CTMCdive <- function(mod, change, which = 0) {
+update.CTMCdive <- function(mod, change, which = 0, print = FALSE) {
   if (which == 0) {
     ms <- vector(mode = "list", length = 3)
     f <- mod$forms  
     f1 <- f 
     f1[["dive"]] <- update(f[["dive"]], change)
-    dive <- ms[[1]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time))
+    dive <- ms[[1]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time, print = print))
     f1 <- f
     f1[["surface"]] <- update(f[["surface"]], change)
-    surf <- ms[[2]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time))
+    surf <- ms[[2]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time, print = print))
     f1 <- lapply(f, FUN = function(fi) {update(fi, change)})
-    both <- ms[[3]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time))
+    both <- ms[[3]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time, print = print))
     aics <- try(AIC(mod, dive, surf, both))
     names(ms) <- c("dive", "surf", "both")
     print(aics)
