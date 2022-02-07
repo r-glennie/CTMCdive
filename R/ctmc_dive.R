@@ -197,6 +197,8 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
                         min_dwell=list(dive=0, surface=0), 
                         series = FALSE, 
                         re = "none",
+                        exp_time = NULL,
+                        fixed_decay = FALSE, 
                         dt = NULL) {
 
   ## Check series
@@ -239,8 +241,10 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
                          log_kappa_surf = 0, 
                          log_lambda_dive = rep(0, length(sm$S_dive_n)),
                          log_lambda_surf = rep(0, length(sm$S_surface_n)), 
-                         log_rf_sd = rep(0, 2))
-
+                         log_rf_sd = rep(0, 2), 
+                         decay_dive = log(0.01), 
+                         decay_surf = log(0.01))
+  
   # if there are smooths of dive or surface, set up the TMB
   # model xs correctly
   if (is.null(sm$S_dive)) {
@@ -313,9 +317,62 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
                   indS = sm$indS,
                   tindD = t(sm$indD),
                   tindS = t(sm$indS), 
+                  weight_dive = rep(1, length(tmb_parameters$s_dive)), 
+                  weight_surf = rep(1, length(tmb_parameters$s_surf)), 
                   flag = 1L,
                   dt = sm$dt)
-
+  
+  # Determine if exposure penalty to be used
+  if (!is.null(exp_time)) {
+    dive_terms <- sapply(sm$gam_dive$smooth, FUN = function(x){x$term})
+    surf_terms <- sapply(sm$gam_surf$smooth, FUN = function(x){x$term})
+    dive_wh <- which(dive_terms == exp_time)
+    surf_wh <- which(surf_terms == exp_time)
+    if (length(dive_wh) > 0) {
+      csum <- c(0,cumsum(sm$S_dive_n))
+      exptimes <- sapply((csum[dive_wh]+1):csum[dive_wh+1], FUN = function(i) {
+        w <- abs(sm$A_dive[,i])
+        sum(dat[[exp_time]]*w)/sum(w)
+      })
+      tmb_dat$weight_dive[(csum[dive_wh]+1):(csum[dive_wh+1])] <- exptimes
+      # add shrinkage penalty 
+      Sold <- tmb_dat$S_dive[(csum[dive_wh]+1):csum[dive_wh+1], (csum[dive_wh]+1):csum[dive_wh+1]]
+      #E <- eigen(Sold)
+      #vals <- E$values
+      #vals[abs(vals) < 1e-10] <- 0.1 * min(abs(vals[vals > 1e-10]))
+      #Snew <- E$vectors %*% diag(vals) %*% solve(E$vectors)
+      #mb_dat$S_dive[(csum[dive_wh]+1):csum[dive_wh+1], (csum[dive_wh]+1):csum[dive_wh+1]] <- Snew
+      #tmb_dat$S_dive[(csum[dive_wh]+1):csum[dive_wh+1], (csum[dive_wh]+1):csum[dive_wh+1]] <- Sold + 1e-16
+      #diag(tmb_dat$S_dive[(csum[dive_wh]+1):csum[dive_wh+1], (csum[dive_wh]+1):csum[dive_wh+1]]) <- diag(Sold) + 1
+    } else {
+      map$decay_dive <- factor(NA)
+    }
+    if (length(surf_wh) > 0) {
+      csum <- c(0,cumsum(sm$S_surface_n))
+      exptimes <- sapply((csum[surf_wh]+1):csum[surf_wh+1], FUN = function(i) {
+        w <- abs(sm$A_surf[,i])
+        sum(dat[[exp_time]]*w)/sum(w)
+      })
+      tmb_dat$weight_surf[(csum[surf_wh]+1):(csum[surf_wh+1])] <- exptimes
+      Sold <- tmb_dat$S_surface[(csum[surf_wh]+1):csum[surf_wh+1], (csum[surf_wh]+1):csum[surf_wh+1]]
+      #E <- eigen(Sold)
+      #vals <- E$values
+      #vals[abs(vals) < 1e-10] <- 0.1 * min(abs(vals[vals > 1e-10]))
+      #Snew <- E$vectors %*% diag(vals) %*% solve(E$vectors)
+      #tmb_dat$S_surface[(csum[surf_wh]+1):csum[surf_wh+1], (csum[surf_wh]+1):csum[surf_wh+1]] <- Snew
+      #tmb_dat$S_surface[(csum[surf_wh]+1):csum[surf_wh+1], (csum[surf_wh]+1):csum[surf_wh+1]] <- Sold + 1e-16 
+      #diag(tmb_dat$S_surface[(csum[surf_wh]+1):csum[surf_wh+1], (csum[surf_wh]+1):csum[surf_wh+1]]) <- diag(Sold) + 1
+    } else {
+       map$decay_surf <- factor(NA)
+    }
+  } else {
+    map$decay_dive <- factor(NA)
+    map$decay_surf <- factor(NA)
+  }
+  if (fixed_decay) {
+    map$decay_dive <- factor(NA)
+    map$decay_surf <- factor(NA)
+  }
   ## Create x
   if (print) cat("Making AD fun.......")
   obj <- MakeADFun(tmb_dat, tmb_parameters, random = random, map = map,
@@ -409,6 +466,8 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
               dat = dat, 
               min_dwell = min_dwell, 
               series = series,
+              fixed_decay = fixed_decay,
+              exp_time = exp_time, 
               dt = dt)
   if(print) cat("done\n")
   class(ans) <- "CTMCdive"
@@ -790,7 +849,7 @@ AIC.CTMCdive <- function(x, ..., k=2){
     
     # DF for fixed effects (not smoopars)
     parnms <- names(this_mod$rep$par.fixed)
-    fixed_edf <- sum(!(parnms %in% c("log_lambda_dive","log_lambda_surf")))
+    fixed_edf <- sum(!(parnms %in% c("log_lambda_dive","log_lambda_surf", "decay_dive", "decay_surf")))
     # total
     total_edf <- dive_edf + surface_edf + fixed_edf
 
@@ -1079,12 +1138,12 @@ update.CTMCdive <- function(mod, change, which = 0) {
     f <- mod$forms  
     f1 <- f 
     f1[["dive"]] <- update(f[["dive"]], change)
-    dive <- ms[[1]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt))
+    dive <- ms[[1]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time))
     f1 <- f
     f1[["surface"]] <- update(f[["surface"]], change)
-    surf <- ms[[2]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt))
+    surf <- ms[[2]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time))
     f1 <- lapply(f, FUN = function(fi) {update(fi, change)})
-    both <- ms[[3]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt))
+    both <- ms[[3]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time))
     aics <- try(AIC(mod, dive, surf, both))
     names(ms) <- c("dive", "surf", "both")
     print(aics)
@@ -1092,7 +1151,7 @@ update.CTMCdive <- function(mod, change, which = 0) {
   } else {
     f <- mod$forms
     f[[which]] <- update(f[[which]], change)
-    m <- FitCTMCdive(f, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt)
+    m <- FitCTMCdive(f, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time)
     return(m)
   }
 }
