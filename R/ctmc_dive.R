@@ -1151,7 +1151,7 @@ update.CTMCdive <- function(mod, change, which = 0, print = FALSE) {
   } else {
     f <- mod$forms
     f[[which]] <- update(f[[which]], change)
-    m <- FitCTMCdive(f, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time)
+    m <- FitCTMCdive(f, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time, print = print)
     return(m)
   }
 }
