@@ -37,6 +37,8 @@ Type objective_function<Type>::operator() ()
   DATA_IVECTOR(S_surface_n); // sizes of sparse matrices
   DATA_INTEGER(include_smooths); // > 0 = include penalty in likelihood evaluation
   DATA_SCALAR(re); // include discrete random effect on dive 
+  DATA_VECTOR(weight_dive); // weights for dive penalty 
+  DATA_VECTOR(weight_surf); // weights for surface penalty 
   
   PARAMETER_VECTOR(par_dive); // dive parameters
   PARAMETER_VECTOR(par_surf); // surface parameters
@@ -44,7 +46,9 @@ Type objective_function<Type>::operator() ()
   PARAMETER(log_kappa_surf); 
   PARAMETER_VECTOR(log_lambda_dive); // dive log smoothing parameter
   PARAMETER_VECTOR(log_lambda_surf); // surface log smoothing parameter
-  PARAMETER_VECTOR(log_rf_sd); // standard deviations for discrete random effects 
+  PARAMETER_VECTOR(log_rf_sd); // standard deviations for discrete random effects
+  PARAMETER(decay_dive); // dive penalty decay rate
+  PARAMETER(decay_surf); // surface penalty decay rate 
   PARAMETER_VECTOR(s_dive); // dive random effects
   PARAMETER_VECTOR(s_surf); // surface random effects
   PARAMETER_VECTOR(rf_dive); // discrete random effect for dive 
@@ -55,6 +59,8 @@ Type objective_function<Type>::operator() ()
   Type kappa_dive = exp(log_kappa_dive); 
   Type kappa_surf = exp(log_kappa_surf); 
   vector<Type> rf_sd = exp(log_rf_sd); 
+  Type decay_dive_pow = exp(decay_dive);// + Type(1.0); 
+  Type decay_surf_pow = exp(decay_surf);// + Type(1.0); 
   
   // Negative log-likelihood
   Type nll = 0;
@@ -68,8 +74,10 @@ Type objective_function<Type>::operator() ()
       for(int i = 0; i < S_dive_n.size(); i++) {
         int Sn = S_dive_n(i);
         SparseMatrix<Type> this_S = S_dive.block(S_start, S_start, Sn, Sn);
-        vector<Type> beta_s = s_dive.segment(S_start, Sn);
-        nll -= Type(0.5) * Sn * log_lambda_dive(i) - 0.5 * lambda_dive(i) * GMRF(this_S, false).Quadform(beta_s);
+        vector<Type> beta_s = s_dive.segment(S_start, Sn); 
+        nll -= Type(0.5) * Sn * log_lambda_dive(i) + decay_dive_pow * weight_dive.segment(S_start, Sn).array().log().sum() - 0.5 * lambda_dive(i) * GMRF(this_S, false).Quadform(beta_s);
+        beta_s = (s_dive.segment(S_start, Sn).array() * (decay_dive_pow * weight_dive.segment(S_start, Sn).array()).exp()).matrix();
+        nll -= decay_dive_pow * weight_dive.segment(S_start, Sn).array().sum() - 0.5 * (beta_s * beta_s).sum(); 
         S_start += Sn;
       }
     }
@@ -80,8 +88,10 @@ Type objective_function<Type>::operator() ()
       for(int i = 0; i < S_surface_n.size(); i++) {
           int Sn = S_surface_n(i);
           SparseMatrix<Type> this_S = S_surface.block(S_start, S_start, Sn, Sn);
-          vector<Type> beta_s = s_surf.segment(S_start, Sn);
+          vector<Type> beta_s = s_surf.segment(S_start, Sn); 
           nll -= Type(0.5) * Sn * log_lambda_surf(i) - 0.5 * lambda_surf(i) * GMRF(this_S, false).Quadform(beta_s);
+          beta_s = (s_surf.segment(S_start, Sn).array() * (decay_surf_pow * weight_surf.segment(S_start, Sn).array()).exp()).matrix();
+          nll -= decay_surf_pow * weight_surf.segment(S_start, Sn).array().sum() - 0.5 * (beta_s * beta_s).sum(); 
           S_start += Sn;
       }
     }
