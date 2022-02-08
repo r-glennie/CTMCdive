@@ -326,44 +326,46 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
   if (!is.null(exp_time)) {
     dive_terms <- sapply(sm$gam_dive$smooth, FUN = function(x){x$term})
     surf_terms <- sapply(sm$gam_surf$smooth, FUN = function(x){x$term})
-    dive_wh <- which(dive_terms == exp_time)
-    surf_wh <- which(surf_terms == exp_time)
-    if (length(dive_wh) > 0) {
-      csum <- c(0,cumsum(sm$S_dive_n))
-      exptimes <- sapply((csum[dive_wh]+1):csum[dive_wh+1], FUN = function(i) {
-        w <- abs(sm$A_dive[,i])
-        sum(dat[[exp_time]]*w)/sum(w)
-      })
-      tmb_dat$weight_dive[(csum[dive_wh]+1):(csum[dive_wh+1])] <- exptimes
-      # add shrinkage penalty 
-      Sold <- tmb_dat$S_dive[(csum[dive_wh]+1):csum[dive_wh+1], (csum[dive_wh]+1):csum[dive_wh+1]]
-      #E <- eigen(Sold)
-      #vals <- E$values
-      #vals[abs(vals) < 1e-10] <- 0.1 * min(abs(vals[vals > 1e-10]))
-      #Snew <- E$vectors %*% diag(vals) %*% solve(E$vectors)
-      #mb_dat$S_dive[(csum[dive_wh]+1):csum[dive_wh+1], (csum[dive_wh]+1):csum[dive_wh+1]] <- Snew
-      #tmb_dat$S_dive[(csum[dive_wh]+1):csum[dive_wh+1], (csum[dive_wh]+1):csum[dive_wh+1]] <- Sold + 1e-16
-      #diag(tmb_dat$S_dive[(csum[dive_wh]+1):csum[dive_wh+1], (csum[dive_wh]+1):csum[dive_wh+1]]) <- diag(Sold) + 1
-    } else {
-      map$decay_dive <- factor(NA)
-    }
-    if (length(surf_wh) > 0) {
-      csum <- c(0,cumsum(sm$S_surface_n))
-      exptimes <- sapply((csum[surf_wh]+1):csum[surf_wh+1], FUN = function(i) {
-        w <- abs(sm$A_surf[,i])
-        sum(dat[[exp_time]]*w)/sum(w)
-      })
-      tmb_dat$weight_surf[(csum[surf_wh]+1):(csum[surf_wh+1])] <- exptimes
-      Sold <- tmb_dat$S_surface[(csum[surf_wh]+1):csum[surf_wh+1], (csum[surf_wh]+1):csum[surf_wh+1]]
-      #E <- eigen(Sold)
-      #vals <- E$values
-      #vals[abs(vals) < 1e-10] <- 0.1 * min(abs(vals[vals > 1e-10]))
-      #Snew <- E$vectors %*% diag(vals) %*% solve(E$vectors)
-      #tmb_dat$S_surface[(csum[surf_wh]+1):csum[surf_wh+1], (csum[surf_wh]+1):csum[surf_wh+1]] <- Snew
-      #tmb_dat$S_surface[(csum[surf_wh]+1):csum[surf_wh+1], (csum[surf_wh]+1):csum[surf_wh+1]] <- Sold + 1e-16 
-      #diag(tmb_dat$S_surface[(csum[surf_wh]+1):csum[surf_wh+1], (csum[surf_wh]+1):csum[surf_wh+1]]) <- diag(Sold) + 1
-    } else {
-       map$decay_surf <- factor(NA)
+    for (jexp in 1:length(exp_time)) {
+      dive_wh <- which(dive_terms == exp_time[jexp])
+      surf_wh <- which(surf_terms == exp_time[jexp])
+      if (length(dive_wh) > 0) {
+        csum <- c(0,cumsum(sm$S_dive_n))
+        exptimes <- sapply((csum[dive_wh]+1):csum[dive_wh+1], FUN = function(i) {
+          w <- abs(sm$A_dive[,i])
+          sum(dat[[exp_time[jexp]]]*w)/sum(w)
+        })
+        tmb_dat$weight_dive[(csum[dive_wh]+1):(csum[dive_wh+1])] <- exptimes
+        # add shrinkage penalty 
+        Sold <- tmb_dat$S_dive[(csum[dive_wh]+1):csum[dive_wh+1], (csum[dive_wh]+1):csum[dive_wh+1]]
+        #E <- eigen(Sold)
+        #vals <- E$values
+        #vals[abs(vals) < 1e-10] <- 0.1 * min(abs(vals[vals > 1e-10]))
+        #Snew <- E$vectors %*% diag(vals) %*% solve(E$vectors)
+        #mb_dat$S_dive[(csum[dive_wh]+1):csum[dive_wh+1], (csum[dive_wh]+1):csum[dive_wh+1]] <- Snew
+        #tmb_dat$S_dive[(csum[dive_wh]+1):csum[dive_wh+1], (csum[dive_wh]+1):csum[dive_wh+1]] <- Sold + 1e-16
+        #diag(tmb_dat$S_dive[(csum[dive_wh]+1):csum[dive_wh+1], (csum[dive_wh]+1):csum[dive_wh+1]]) <- diag(Sold) + 1
+      } else {
+        map$decay_dive <- factor(NA)
+      }
+      if (length(surf_wh) > 0) {
+        csum <- c(0,cumsum(sm$S_surface_n))
+        exptimes <- sapply((csum[surf_wh]+1):csum[surf_wh+1], FUN = function(i) {
+          w <- abs(sm$A_surf[,i])
+          sum(dat[[exp_time[jexp]]]*w)/sum(w)
+        })
+        tmb_dat$weight_surf[(csum[surf_wh]+1):(csum[surf_wh+1])] <- exptimes
+        Sold <- tmb_dat$S_surface[(csum[surf_wh]+1):csum[surf_wh+1], (csum[surf_wh]+1):csum[surf_wh+1]]
+        #E <- eigen(Sold)
+        #vals <- E$values
+        #vals[abs(vals) < 1e-10] <- 0.1 * min(abs(vals[vals > 1e-10]))
+        #Snew <- E$vectors %*% diag(vals) %*% solve(E$vectors)
+        #tmb_dat$S_surface[(csum[surf_wh]+1):csum[surf_wh+1], (csum[surf_wh]+1):csum[surf_wh+1]] <- Snew
+        #tmb_dat$S_surface[(csum[surf_wh]+1):csum[surf_wh+1], (csum[surf_wh]+1):csum[surf_wh+1]] <- Sold + 1e-16 
+        #diag(tmb_dat$S_surface[(csum[surf_wh]+1):csum[surf_wh+1], (csum[surf_wh]+1):csum[surf_wh+1]]) <- diag(Sold) + 1
+      } else {
+         map$decay_surf <- factor(NA)
+      }
     }
   } else {
     map$decay_dive <- factor(NA)
