@@ -9,7 +9,7 @@ T <- 24 * 60 * 7
 exp_T <- T / 2
 
 # time step 
-dt <- 0.01
+dt <- 1
 
 # time-varying intensities  
 tgr <- seq(0, T, by = dt)
@@ -37,7 +37,7 @@ abline(v = c(exp_T, exp_T + 24 * 60), col = "firebrick", lty = "dashed")
 # simulate data
 seed <- sample(1:65555, size = 1)
 set.seed(seed)
-dat <- simulateCTMC2(dive_I, surf_I, T, dt, tstart = exp_T, kappa = kappa)
+dat <- simulateCTMC2(dive_I, surf_I, T, dt, kappa = kappa)
 
 # add exposure data
 #dat$expt <- ifelse(dat$time >= exp_T & dat$time < exp_T + 24 * 60, dat$time - exp_T, 0)

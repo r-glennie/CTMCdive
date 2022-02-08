@@ -45,7 +45,7 @@ while (sim <= nsims) {
   err <- FALSE
   setTxtProgressBar(pb, sim)
   # simulate data
-  dat <- simulateCTMC2(dive_I, surf_I, T, dt = 0.01, tstart = exp_T, kappa = kappa)
+  dat <- simulateCTMC2(dive_I, surf_I, T, dt = 0.01, kappa = kappa)
   
   # add exposure data
   #dat$expt <- ifelse(dat$time >= exp_T & dat$time < exp_T + 24 * 60, dat$time - exp_T, 0)
