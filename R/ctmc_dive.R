@@ -242,8 +242,8 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
                          log_lambda_dive = rep(0, length(sm$S_dive_n)),
                          log_lambda_surf = rep(0, length(sm$S_surface_n)), 
                          log_rf_sd = rep(0, 2), 
-                         decay_dive = log(0.01), 
-                         decay_surf = log(0.01))
+                         decay_dive = 0, 
+                         decay_surf = 0)
   
   # if there are smooths of dive or surface, set up the TMB
   # model xs correctly
