@@ -335,7 +335,7 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
           w <- abs(sm$A_dive[,i])
           sum(dat[[exp_time[jexp]]]*w)/sum(w)
         })
-        tmb_dat$weight_dive[(csum[dive_wh]+1):(csum[dive_wh+1])] <- exptimes + 1e-10
+        tmb_dat$weight_dive[(csum[dive_wh]+1):(csum[dive_wh+1])] <- exptimes
         # add shrinkage penalty 
         Sold <- tmb_dat$S_dive[(csum[dive_wh]+1):csum[dive_wh+1], (csum[dive_wh]+1):csum[dive_wh+1]]
         #E <- eigen(Sold)
@@ -354,7 +354,7 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
           w <- abs(sm$A_surf[,i])
           sum(dat[[exp_time[jexp]]]*w)/sum(w)
         })
-        tmb_dat$weight_surf[(csum[surf_wh]+1):(csum[surf_wh+1])] <- exptimes + 1e-10
+        tmb_dat$weight_surf[(csum[surf_wh]+1):(csum[surf_wh+1])] <- exptimes
         Sold <- tmb_dat$S_surface[(csum[surf_wh]+1):csum[surf_wh+1], (csum[surf_wh]+1):csum[surf_wh+1]]
         #E <- eigen(Sold)
         #vals <- E$values
