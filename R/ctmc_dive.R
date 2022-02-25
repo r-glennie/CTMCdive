@@ -13,14 +13,14 @@
 #' @importFrom mgcv gam predict.gam
 #' @importFrom methods as
 #' @importFrom Matrix bdiag
-MakeMatrices <- function(forms, dat, min_dwell, series = FALSE, nint = 10000) {
+MakeMatrices <- function(forms, dat, min_dwell, series = FALSE, nint = 10000, knots = NULL) {
 
   # results list
   res <- list()
 
   ## dive model
   # GAM setup
-  gam_dive <- gam(forms[["dive"]], data = dat, method = "REML")
+  gam_dive <- gam(forms[["dive"]], data = dat, method = "REML", knots = knots)
   res$gam_dive <- gam_dive
   # accumulate smoothing matrix, block diagonal
   if(length(gam_dive$smooth) > 0){
@@ -56,7 +56,7 @@ MakeMatrices <- function(forms, dat, min_dwell, series = FALSE, nint = 10000) {
   
   ## surface model
   # GAM setup
-  gam_surface <- gam(forms[["surface"]], data = dat, method = "REML")
+  gam_surface <- gam(forms[["surface"]], data = dat, method = "REML", knots = knots)
   res$gam_surface <- gam_surface 
   # accumulate smoothing matrix, block diagonal
   if(length(gam_surface$smooth) > 0){
@@ -198,7 +198,8 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
                         series = FALSE, 
                         re = "none",
                         exp_time = NULL,
-                        fixed_decay = FALSE, 
+                        fixed_decay = FALSE,
+                        knots = NULL, 
                         dt = NULL) {
 
   ## Check series
@@ -222,7 +223,7 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
   # smoothing data
   random <- NULL
   map <- list()
-  sm <- MakeMatrices(forms, dat, min_dwell = min_dwell, series = series, nint = nint)
+  sm <- MakeMatrices(forms, dat, min_dwell = min_dwell, series = series, nint = nint, knots = knots)
 
   len <- c(ncol(sm$Xs_dive), ncol(sm$Xs_surface))
   names(len) <- c("dive", "surface")
@@ -470,7 +471,8 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
               series = series,
               fixed_decay = fixed_decay,
               exp_time = exp_time, 
-              dt = dt)
+              dt = dt, 
+              knots = knots)
   if(print) cat("done\n")
   class(ans) <- "CTMCdive"
   return(ans)
@@ -1140,12 +1142,12 @@ update.CTMCdive <- function(mod, change, which = 0, print = FALSE) {
     f <- mod$forms  
     f1 <- f 
     f1[["dive"]] <- update(f[["dive"]], change)
-    dive <- ms[[1]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time, print = print))
+    dive <- ms[[1]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time, print = print, knots = mod$knots))
     f1 <- f
     f1[["surface"]] <- update(f[["surface"]], change)
-    surf <- ms[[2]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time, print = print))
+    surf <- ms[[2]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time, print = print, knots = mod$knots))
     f1 <- lapply(f, FUN = function(fi) {update(fi, change)})
-    both <- ms[[3]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time, print = print))
+    both <- ms[[3]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time, print = print, knots = mod$knots))
     aics <- try(AIC(mod, dive, surf, both))
     names(ms) <- c("dive", "surf", "both")
     print(aics)
@@ -1153,7 +1155,7 @@ update.CTMCdive <- function(mod, change, which = 0, print = FALSE) {
   } else {
     f <- mod$forms
     f[[which]] <- update(f[[which]], change)
-    m <- FitCTMCdive(f, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time, print = print)
+    m <- FitCTMCdive(f, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time, print = print, knots = mod$knots)
     return(m)
   }
 }
