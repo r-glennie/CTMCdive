@@ -5,7 +5,7 @@
 \alias{print.CTMCdive}
 \title{Print summary of CTMCdive x}
 \usage{
-\method{summary}{CTMCdive}(x, ...)
+\method{summary}{CTMCdive}(x, print = TRUE, ...)
 }
 \arguments{
 \item{x}{the CTMCdive fitted model x}

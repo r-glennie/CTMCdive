@@ -11,6 +11,9 @@ FitCTMCdive(
   min_dwell = list(dive = 0, surface = 0),
   series = FALSE,
   re = "none",
+  exp_time = NULL,
+  fixed_decay = FALSE,
+  knots = NULL,
   dt = NULL
 )
 }

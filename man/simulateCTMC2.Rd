@@ -4,7 +4,15 @@
 \alias{simulateCTMC2}
 \title{Simulate CTMCdive data}
 \usage{
-simulateCTMC2(dive_fn, surf_fn, T, dt, sd = NULL, print = TRUE)
+simulateCTMC2(
+  dive_fn,
+  surf_fn,
+  T,
+  dt,
+  kappa = list(dive = 1, surf = 1),
+  sd = NULL,
+  print = TRUE
+)
 }
 \arguments{
 \item{dive_fn}{function that given a vector of times computes dive intensity at those times}

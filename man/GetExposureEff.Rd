@@ -2,23 +2,20 @@
 % Please edit documentation in R/ctmc_dive.R
 \name{GetExposureEff}
 \alias{GetExposureEff}
-\title{Estimate exposure effect for dive and surface}
+\title{Get exposure effect on predicted durations}
 \usage{
-GetExposureEff(mod, predgrid, basedat, nsims = 1000)
+GetExposureEff(mod, exp_var = "exp", base_val = 0, exp_val = NULL, nsims = 200)
 }
 \arguments{
-\item{mod}{fitted CTMC model}
+\item{mod}{fitted CTMCdive model}
 
-\item{predgrid}{data frame with same columns as data but with a user-defined time grid to estimate the effect over 
-must have a column which is 1 when exposure is one and zero otherwise}
+\item{exp_var}{name of variable(s) non-zero when exposure occurs}
 
-\item{nsims}{number of posterior simulations, default is 1000}
-
-\item{exp}{name of exposure indicator}
+\item{nsims}{number of posterior simulations}
 }
 \value{
-list with dive and surface elements which each contain the mean exposure effect and the credible interval bands
+simulations of difference between exposure and baseline models
 }
 \description{
-Estimate exposure effect for dive and surface
+Get exposure effect on predicted durations
 }

@@ -872,6 +872,28 @@ AIC.CTMCdive <- function(x, ..., k=2){
 
 }
 
+#' Akaike's An Information Criterion for lists of CTMCdive models
+#'
+#' Calculate the AIC from a fitted model.
+#'
+#' @param x a fitted detection function x
+#' @param k penalty per parameter to be used; the default \code{k = 2} is the "classical" AIC
+#' @param \dots optionally more fitted model xs.
+#' @author David L Miller, Richard Glennie 
+#' @export
+#' @importFrom stats logLik
+AIC.CTMCdiveList <- function(x, ..., k=2){
+  nms <- names(x)
+  listnm <- deparse(substitute(x))
+  fullnms <- paste0(listnm, ".", nms)
+  aics <- data.frame(df = rep(0, length(nms)), AIC = rep(0, length(nms)))
+  for (i in 1:length(nms)) {
+    aics[i,] <- AIC(x[[i]])
+  }
+  rownames(aics) <- fullnms
+  return(aics)
+}
+  
 #' Akaike's An Information Criterion for CTMCdive models
 #'
 #' Calculate the AIC from a fitted model.
@@ -1151,6 +1173,7 @@ update.CTMCdive <- function(mod, change, which = 0, print = FALSE) {
     aics <- try(AIC(mod, dive, surf, both))
     names(ms) <- c("dive", "surf", "both")
     print(aics)
+    class(ms) <- "CTMCdiveList"
     return(ms)
   } else {
     f <- mod$forms
