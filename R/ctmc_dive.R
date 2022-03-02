@@ -774,13 +774,16 @@ get_samples <- function(mod, n=200){
   # remove smoopars
   prec <- prec[!grepl("log_lambda_", colnames(prec)),
                !grepl("log_lambda_", colnames(prec)), drop=FALSE]
+  prec <- prec[!grepl("decay_", colnames(prec)),
+               !grepl("decay_", colnames(prec)), drop=FALSE]
   # solve to get variance-covariance matrix
   vc <- solve(prec)
 
   # get pars
   pars <- c(mod$rep$par.fixed, mod$rep$par.random)
   pars <- pars[!grepl("log_lambda_", names(pars))]
-
+  pars <- pars[!grepl("decay_", names(pars))]
+  
   samps <- rmvn(n, pars, vc)
   colnames(samps) <- names(pars)
   return(samps)
