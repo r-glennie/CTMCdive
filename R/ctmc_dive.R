@@ -1135,7 +1135,11 @@ plotExposureEffect <- function(expeff, pick = "all") {
     sig <- ifelse(expeff$dive$mean > 0, expeff$dive$ci[1,] > 1e-10, expeff$dive$ci[2,] < -1e-10)
     cols <- ifelse(sig, "blue", "black")
     plot(expeff$time, expeff$dive$mean, type = "n", ylim = range(expeff$dive$ci), xlab = "Time", ylab = "Diving effect")
-    polygon(c(rev(expeff$time), expeff$time), c(rev(expeff$dive$ci[2,]), expeff$dive$ci[1,]), col = "grey90", border = NA)
+    if (length(expeff$time) > 1) {
+      polygon(c(rev(expeff$time), expeff$time), c(rev(expeff$dive$ci[2,]), expeff$dive$ci[1,]), col = "grey90", border = NA)
+    } else {
+      lines(rep(expeff$time, 2), expeff$dive$ci[,1])
+    }
     points(expeff$time, expeff$dive$mean, col = cols, pch = 19)
     #arrows(expeff$time, expeff$dive$ci[1,], expeff$time, expeff$dive$ci[2,], length = 0.05, code = 3, angle = 90)
     abline(h = 0, col = "red", lty = "dotted", lwd = 1.5)
@@ -1144,7 +1148,11 @@ plotExposureEffect <- function(expeff, pick = "all") {
     sig <- ifelse(expeff$surf$mean > 0, expeff$surf$ci[1,] > 1e-10, expeff$surf$ci[2,] < -1e-10)
     cols <- ifelse(sig, "blue", "black")
     plot(expeff$time, expeff$surf$mean, type = "n", ylim = range(expeff$surf$ci), xlab = "Time", ylab = "Surfacing effect")
-    polygon(c(rev(expeff$time), expeff$time), c(rev(expeff$surf$ci[2,]), expeff$surf$ci[1,]), col = "grey90", border = NA)
+    if (length(expeff$time) > 1) {
+      polygon(c(rev(expeff$time), expeff$time), c(rev(expeff$surf$ci[2,]), expeff$surf$ci[1,]), col = "grey90", border = NA)
+    } else {
+      lines(rep(expeff$time, 2), expeff$surf$ci[,1])
+    }
     points(expeff$time, expeff$surf$mean, col = cols, pch = 19)
     #arrows(expeff$time, expeff$surf$ci[1,], expeff$time, expeff$surf$ci[2,], length = 0.05, code = 3, angle = 90)
     abline(h = 0, col = "red", lty = "dotted", lwd = 1.5)
