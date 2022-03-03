@@ -14,7 +14,7 @@ simulateCTMC2 <- function(dive_fn, surf_fn, T, dt, kappa = list(dive = 1, surf =
   odiveI <- dive_fn(tgr)
   osurfI <- surf_fn(tgr)
   # current time 
-  t <- tstart
+  t <- 0
   # create empty dataset
   dat <- data.frame(ID = 1, dive = 0, surface = 0, time = 1)
   cur <- 1 
