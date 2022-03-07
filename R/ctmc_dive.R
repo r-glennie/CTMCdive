@@ -13,7 +13,7 @@
 #' @importFrom mgcv gam predict.gam
 #' @importFrom methods as
 #' @importFrom Matrix bdiag
-MakeMatrices <- function(forms, dat, min_dwell, series = FALSE, nint = 10000, knots = NULL) {
+MakeMatrices <- function(forms, dat, min_dwell, series = FALSE, nint = 10000, breaks = NULL, knots = NULL) {
 
   # results list
   res <- list()
@@ -96,6 +96,15 @@ MakeMatrices <- function(forms, dat, min_dwell, series = FALSE, nint = 10000, kn
               length = nint)
   # spacing on prediction grid
   dt <- mean(diff(ints))
+  # find breaks on grid
+  breakwh <- rep(1, nint)
+  if (!is.null(breaks)) {
+    for (i in 1:nrow(breaks)) {
+      breakstart <- which.min((ints - breaks[i,1])^2)
+      breakend <- which.min((ints - breaks[i,2])^2)
+      breakwh[breakstart:breakend] <- 0 
+    }
+  }
 
   # do this for each part of the model
   pred_mat_dive <- pred_mat_maker(gam_dive, dat, ints)
@@ -124,6 +133,7 @@ MakeMatrices <- function(forms, dat, min_dwell, series = FALSE, nint = 10000, kn
   indD <- indS <- matrix(0, nrow = n, ncol = nint)
   dive_end <- divedat$time + divedat$dive
   for (i in 1:nint) {
+    if (breakwh[i] < 1) next 
     wh <- which((ints[i] < divedat$time[-1] + 1e-10) &
                 (ints[i] > (dive_end[-n]+min_dwell$surface - 1e-10)))
     if (length(wh) != 0) {
@@ -200,6 +210,7 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
                         exp_time = NULL,
                         fixed_decay = FALSE,
                         knots = NULL, 
+                        breaks = NULL, 
                         dt = NULL) {
 
   ## Check series
@@ -223,7 +234,7 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
   # smoothing data
   random <- NULL
   map <- list()
-  sm <- MakeMatrices(forms, dat, min_dwell = min_dwell, series = series, nint = nint, knots = knots)
+  sm <- MakeMatrices(forms, dat, min_dwell = min_dwell, series = series, nint = nint, knots = knots, breaks = breaks)
 
   len <- c(ncol(sm$Xs_dive), ncol(sm$Xs_surface))
   names(len) <- c("dive", "surface")
@@ -472,7 +483,8 @@ FitCTMCdive <- function(forms, dat, print = TRUE,
               fixed_decay = fixed_decay,
               exp_time = exp_time, 
               dt = dt, 
-              knots = knots)
+              knots = knots, 
+              breaks = breaks)
   if(print) cat("done\n")
   class(ans) <- "CTMCdive"
   return(ans)
@@ -1175,12 +1187,12 @@ update.CTMCdive <- function(mod, change, which = 0, print = FALSE) {
     f <- mod$forms  
     f1 <- f 
     f1[["dive"]] <- update(f[["dive"]], change)
-    dive <- ms[[1]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time, print = print, knots = mod$knots))
+    dive <- ms[[1]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time, print = print, knots = mod$knots, breaks = mod$breaks))
     f1 <- f
     f1[["surface"]] <- update(f[["surface"]], change)
-    surf <- ms[[2]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time, print = print, knots = mod$knots))
+    surf <- ms[[2]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time, print = print, knots = mod$knots, breaks = mod$breaks))
     f1 <- lapply(f, FUN = function(fi) {update(fi, change)})
-    both <- ms[[3]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time, print = print, knots = mod$knots))
+    both <- ms[[3]] <- try(FitCTMCdive(f1, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time, print = print, knots = mod$knots, breaks = mod$breaks))
     aics <- try(AIC(mod, dive, surf, both))
     names(ms) <- c("dive", "surf", "both")
     print(aics)
@@ -1189,7 +1201,7 @@ update.CTMCdive <- function(mod, change, which = 0, print = FALSE) {
   } else {
     f <- mod$forms
     f[[which]] <- update(f[[which]], change)
-    m <- FitCTMCdive(f, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time, print = print, knots = mod$knots)
+    m <- FitCTMCdive(f, mod$dat, min_dwell = mod$min_dwell, series = mod$series, dt = mod$dt, fixed_decay = mod$fixed_decay, exp_time = mod$exp_time, print = print, knots = mod$knots, breaks = mod$breaks)
     return(m)
   }
 }
