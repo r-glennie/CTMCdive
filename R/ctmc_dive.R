@@ -903,7 +903,11 @@ AIC.CTMCdiveList <- function(x, ..., k=2){
   fullnms <- paste0(listnm, ".", nms)
   aics <- data.frame(df = rep(0, length(nms)), AIC = rep(0, length(nms)))
   for (i in 1:length(nms)) {
-    aics[i,] <- AIC(x[[i]])
+    if ("CTMCdive" %in% class(x[[i]])) {
+      aics[i,] <- AIC(x[[i]])
+    } else {
+      aics[i,] <- c(NA, NA)
+    }
   }
   rownames(aics) <- fullnms
   return(aics)
