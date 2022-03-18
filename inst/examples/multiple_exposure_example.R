@@ -20,7 +20,7 @@ dive_I <- function(t) {
 surf_I <- function(t, exp = TRUE) {
   eff <- 0.02 * (sin(2 * pi * t / T) + 1.2) + 0.06
   a <- exp_T[1] - 24 * 60 
-  b <- exp_T[1] + 24 * 60
+  b <- exp_T[1] + 12 * 60
   if(exp) eff <- ifelse(t > exp_T[1], eff - 0.05 * (t - a)/(exp_T[1] - a) * (t - b)/(exp_T[1] - b) * (t > a) * (t < b), eff)
   a <- exp_T[2] - 24 * 60 
   b <- exp_T[2] + 12 * 60
@@ -44,11 +44,13 @@ set.seed(seed)
 dat <- simulateCTMC2(dive_I, surf_I, T, dt, kappa = kappa)
 
 # add exposure data
-dat$exp1 <- ifelse(dat$time >= exp_T[1] & dat$time < exp_T[2], 1, 0)
-dat$exp2 <- ifelse(dat$time >= exp_T[2], 1, 0)
+window_width <- 24 * 60 
+dat$exp1 <- ifelse(dat$time >= exp_T[1] & dat$time < exp_T[1] + window_width, 1, 0)
+dat$exp2 <- ifelse(dat$time >= exp_T[2] & dat$time < exp_T[2] + window_width, 1, 0)
 dat$expt1 <- (dat$time - exp_T[1]) * dat$exp1
 dat$expt2 <- (dat$time - exp_T[2]) * dat$exp2
-
+dat$exp1 <- factor(dat$exp1, ordered = TRUE)
+dat$exp2 <- factor(dat$exp2, ordered = TRUE)
 
 # plot data
 plot(dat$time, dat$dive, pch = 19, xlab = "Time of Dive Start", ylab = "Dive Duration")
@@ -62,13 +64,11 @@ abline(v = c(exp_T, exp_T + 24 * 60), col = "firebrick", lty = "dashed")
 forms <- list(surface ~ s(time, bs = "ts"),
               dive ~ s(time, bs = "ts"))
 # fit model
-m0 <- FitCTMCdive(forms, dat, dt = 1, print = TRUE, exp_time = c("expt1", "expt2"))
+m0 <- FitCTMCdive(forms, dat, dt = 1, print = TRUE)
 
 # fit exposure effect
-mexp1 <- update(m0, ~.+ s(expt1, by = exp1, bs = "bs", k = 10, m = c(2, 1)))
-
-mexp2 <- update(mexp1$surf, ~.+ s(expt2, by = exp2, bs = "bs", k = 10, m = c(2, 1)))
-
+mexp1 <- update(m0, ~.+ exp1 + s(expt1, by = exp1, bs = "cs", k = 10, m = 1))
+mexp2 <- update(mexp1$surf, ~.+ exp2 + s(expt2, by = exp2, bs = "cs", k = 10, m = 1))
 
 # select model
 mod <- mexp2$both
@@ -97,10 +97,12 @@ qqnorm(rsurf); qqline(rsurf)
 # estimated exposure effect
 expeff1 <- GetExposureEff(mod, exp_var = "exp1")
 plotExposureEffect(expeff1, pick = "dive")
-abline(v = c(exp_T[1], exp_T[1] + 24 * 60))
+abline(v = c(exp_T[1], exp_T[1] + window_width))
 expeff2 <- GetExposureEff(mod, exp_var = "exp2")
 plotExposureEffect(expeff2, pick = "dive")
-abline(v = c(exp_T[2], exp_T[2] + 24 * 60))
+abline(v = c(exp_T[2], exp_T[2] + window_width))
+plotExposureEffect(expeff2, pick = "surface")
+abline(v = c(exp_T[2], exp_T[2] + window_width))
 
 # plot exposure against baseline prediction 
 limits <- c(exp_T[1] - 24*60, exp_T[1] + 24 * 3 * 60)

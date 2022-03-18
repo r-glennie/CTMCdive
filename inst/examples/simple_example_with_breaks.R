@@ -10,10 +10,6 @@ surf_I <- function(t) {return(rep(0.04, length(t)))}
 # set kappa
 kappa <- list(dive = 5, surf = 5)
 
-# set individual-level random effects
-#sd <- c(0.2, 0.5) # individual-level
-sd <- c(1, 0.5, 0.7) # correlated random effects
-
 # total observation time 
 T <- 60 * 24 * 7
 
@@ -21,12 +17,21 @@ T <- 60 * 24 * 7
 dt <- 0.1
 
 # simulate data
-dat <- simulateCTMC2(dive_I, surf_I, T, dt, kappa = kappa, sd = sd)
+dat <- simulateCTMC2(dive_I, surf_I, T, dt, kappa = kappa)
+
+# make breaks
+olddat <- dat
+dat <- dat[-c(30:50, 100:130),]
+
+# set breaks 
+breaks <- data.frame(start = c(olddat$time[30], olddat$time[100]), 
+                     end = c(olddat$time[51], olddat$time[131]))
 
 # plot data
-plot(dat$dive, pch = 19, xlab = "Time of Dive Start", ylab = "Dive Duration")
-plot(dat$surf, pch = 19, xlab = "Time of Dive Start", ylab = "Surface Duration")
-plot(dat$dive, dat$surf)
+plot(dat$time, dat$dive, pch = 19, xlab = "Time of Dive Start", ylab = "Dive Duration")
+abline(v = c(breaks$start, breaks$end), lty = "dotted", col = "steelblue")
+plot(dat$time, dat$surf, pch = 19, xlab = "Time of Dive Start", ylab = "Surface Duration")
+abline(v = c(breaks$start, breaks$end), lty = "dotted", col = "steelblue")
 
 # Fit Model ---------------------------------------------------------------
 
@@ -34,14 +39,10 @@ plot(dat$dive, dat$surf)
 forms <- list(surface ~ 1,
               dive ~ 1)
 # fit model
-m <- FitCTMCdive(forms, dat, print = TRUE)
-m_ind <- FitCTMCdive(forms, dat, print = TRUE, re = "ind")
-m_corr <- FitCTMCdive(forms, dat, print = TRUE, re = "corr")
-
-AIC(m, m_ind, m_corr)
+mod <- FitCTMCdive(forms, dat, breaks = breaks, print = TRUE)
 
 # see results
-mod <- m_corr
+mod
 plot(mod)
 exp(mod$res$surface[,1])
 exp(mod$res$dive[,1])

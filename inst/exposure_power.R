@@ -17,10 +17,10 @@ dive_I <- function(t) {
   eff <- 0.06 * (sin(2 * pi * t / T - pi / 2)) + 6 * 0.05
   return(eff)
 }
-surf_I <- function(t, exp = TRUE) {
+surf_I <- function(t, exp = FALSE) {
   eff <- 0.02 * (sin(2 * pi * t / T) + 1.2) + 0.05
   a <- exp_T - 24 * 60 
-  b <- exp_T + 24 * 60
+  b <- exp_T + 12 * 60
   if(exp) eff <- ifelse(t > exp_T, eff - 0.05 * (t - a)/(exp_T - a) * (t - b)/(exp_T - b) * (t > a) * (t < b), eff)
   return(eff)
 }
@@ -48,20 +48,18 @@ while (sim <= nsims) {
   dat <- simulateCTMC2(dive_I, surf_I, T, dt = 0.01, kappa = kappa)
   
   # add exposure data
-  #dat$expt <- ifelse(dat$time >= exp_T & dat$time < exp_T + 24 * 60, dat$time - exp_T, 0)
-  #dat$exp <- ifelse(dat$time >= exp_T & dat$time < exp_T + 24 * 60, 1, 0)
-  #dat$expf <- factor(dat$exp, ordered = TRUE)
-  dat$expt <- ifelse(dat$time >= exp_T, dat$time - exp_T, 0)
-  dat$exp <- ifelse(dat$time >= exp_T, 1, 0)
+  dat$expt <- ifelse(dat$time >= exp_T & dat$time < exp_T + 24 * 60, dat$time - exp_T, 0)
+  dat$exp <- ifelse(dat$time >= exp_T & dat$time < exp_T + 24 * 60, 1, 0)
+  dat$expf <- factor(dat$exp, ordered = TRUE)
   
   # Basic model
   f0 <- list(surface ~ s(time, bs = "ts"),
              dive ~ s(time, bs = "ts"))
-  m0 <- try(FitCTMCdive(f0, dat, dt = 1, print = FALSE, exp_time = "expt"))
+  m0 <- try(FitCTMCdive(f0, dat, dt = 1, print = FALSE))
   if ("try-error" %in% class(m0)) {sim <- sim - 1; err <- TRUE}
-  forms <- list(surface ~ s(time, bs = "ts") + s(expt, by = exp, bs ="bs", k = 20, m = c(2,1)),
+  forms <- list(surface ~ s(time, bs = "ts") + expf + s(expt, by = expf, bs ="cs", k = 10, m = 1),
                 dive ~ s(time, bs = "ts"))
-  mexp <- try(FitCTMCdive(forms, dat, dt = 1, print = FALSE, exp_time = "expt"))
+  mexp <- try(FitCTMCdive(forms, dat, dt = 1, print = FALSE))
   if ("try-error" %in% class(mexp)) {sim <- sim - 1; err <- TRUE}
   mods[[sim]] <- list(m0 = m0, mexp = mexp)
   aic <- AIC(m0, mexp)
@@ -70,7 +68,7 @@ while (sim <= nsims) {
     next
   }
   if (aic["mexp", 2] < aic["m0", 2]- 2) {
-    expeff <- try(GetExposureEff(mexp, exp_var = "exp"))
+    expeff <- try(GetExposureEff(mexp, exp_var = "expf"))
     if ("try-error" %in% class(expeff)) {
       sim <- sim - 1; err <- TRUE
     } else {
