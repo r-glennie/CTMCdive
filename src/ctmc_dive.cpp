@@ -76,8 +76,6 @@ Type objective_function<Type>::operator() ()
         SparseMatrix<Type> this_S = S_dive.block(S_start, S_start, Sn, Sn);
         vector<Type> beta_s = s_dive.segment(S_start, Sn); 
         nll -= Type(0.5) * Sn * log_lambda_dive(i) - 0.5 * lambda_dive(i) * GMRF(this_S, false).Quadform(beta_s);
-        beta_s = (s_dive.segment(S_start, Sn).array() * (decay_dive_pow * weight_dive.segment(S_start, Sn).array()).exp()).matrix();
-        nll -= decay_dive_pow * weight_dive.segment(S_start, Sn).array().sum() - 0.5 * (beta_s * beta_s).sum(); 
         S_start += Sn;
       }
     }
@@ -90,8 +88,6 @@ Type objective_function<Type>::operator() ()
           SparseMatrix<Type> this_S = S_surface.block(S_start, S_start, Sn, Sn);
           vector<Type> beta_s = s_surf.segment(S_start, Sn); 
           nll -= Type(0.5) * Sn * log_lambda_surf(i) - 0.5 * lambda_surf(i) * GMRF(this_S, false).Quadform(beta_s);
-          beta_s = (s_surf.segment(S_start, Sn).array() * (decay_surf_pow * weight_surf.segment(S_start, Sn).array()).exp()).matrix();
-          nll -= decay_surf_pow * weight_surf.segment(S_start, Sn).array().sum() - 0.5 * (beta_s * beta_s).sum(); 
           S_start += Sn;
       }
     }
