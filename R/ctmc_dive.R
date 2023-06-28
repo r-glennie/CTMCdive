@@ -180,7 +180,7 @@ pred_mat_maker <- function(model, dat, ints){
       args <- c(list(ints), attributes(dat[[cc]])$args)
       newdat[[cc]] <- do.call(attributes(dat[[cc]])$f, args)
     } else{
-      newdat[[cc]] <- approx(dat$time, dat[[cc]], ints, method="linear", rule=2)$y
+      newdat[[cc]] <- approx(dat$time, dat[[cc]], ints, method="constant", rule=2)$y
     }
   }
   # build the Lp matrix!
