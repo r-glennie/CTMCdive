@@ -1,7 +1,7 @@
 all: ctmc_dive.dll
 
 ctmc_dive.dll: ctmc_dive.cpp
-	$(R_HOME)/bin/Rscript --vanilla -e "TMB::compile('ctmc_dive.cpp','-O0 -g -Wno-ignored-attributes', safebounds=FALSE)"
+	$(R_HOME)/bin/Rscript --vanilla -e "TMB::compile('ctmc_dive.cpp','-O3 -g -Wno-ignored-attributes', safebounds=FALSE)"
 	
 clean:
 	rm -rf *o 
